@@ -12118,11 +12118,12 @@ def api_pos_purchase_return():
                    pi.paid_amount, pi.payment_method, pi.branch_id,
                    pi.status AS invoice_status, bp.name AS supplier_name,
                    bp.payable_account_id, p.name AS product_name,
-                   p.is_stock_item, p.allow_decimal_qty
+                   p.is_stock_item, p.allow_decimal_qty, u.decimal_places
             FROM purchase_invoice_items pii
             JOIN purchase_invoices pi ON pi.id=pii.invoice_id
             JOIN business_partners bp ON bp.id=pi.supplier_id AND bp.company_id=pi.company_id
             JOIN products p ON p.id=pii.product_id AND p.company_id=pi.company_id
+            JOIN units u ON u.id=pii.unit_id AND u.company_id=pi.company_id
             WHERE pii.id=? AND pi.company_id=?
         """, (purchase_item_id, company_id)).fetchone()
         if not item or item["invoice_status"] != "approved" or not item["is_stock_item"]:
@@ -12132,9 +12133,11 @@ def api_pos_purchase_return():
         if original_qty <= 0:
             conn.rollback()
             return jsonify(ok=False, error="كمية بند الفاتورة الأصلية غير صحيحة"), 400
-        if not item["allow_decimal_qty"] and abs(quantity - round(quantity)) > 0.000001:
+        decimal_places = max(0, min(6, int(item["decimal_places"] or 0)))
+        rounded_quantity = round(quantity, decimal_places)
+        if (not item["allow_decimal_qty"] and abs(quantity - round(quantity)) > 0.000001) or abs(quantity - rounded_quantity) > 0.000001:
             conn.rollback()
-            return jsonify(ok=False, error="هذا الصنف لا يسمح بالكميات العشرية"), 400
+            return jsonify(ok=False, error=f"كمية الصنف يجب ألا تتجاوز {decimal_places} منازل عشرية"), 400
         already_returned = float(conn.execute(
             "SELECT COALESCE(SUM(quantity),0) AS qty FROM purchase_return_items WHERE purchase_item_id=?",
             (purchase_item_id,),
