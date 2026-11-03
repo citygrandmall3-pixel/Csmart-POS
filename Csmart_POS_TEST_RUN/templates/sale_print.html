@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>فاتورة {{ sale.invoice_no }}</title>
+<style>
+body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; color: #222; }
+.header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 18px; }
+.header h1 { margin: 6px 0; font-size: 22px; }
+.header p { margin: 3px 0; font-size: 13px; color: #555; }
+.logo-img { display: block; margin: 0 auto 10px auto; object-fit: contain; }
+.logo-text { font-size: 48px; font-weight: 800; margin-bottom: 8px; }
+.doc-title { text-align: center; font-size: 18px; margin: 12px 0; color: #444; }
+.info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.info div { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 13px; }
+th, td { border: 1px solid #999; padding: 7px; text-align: right; }
+th { background: #f0f0f0; font-weight: bold; }
+.totals { width: 55%; margin-right: auto; }
+.totals td { background: #fafafa; }
+.totals td:last-child { text-align: left; font-weight: bold; }
+.footer { margin-top: 20px; padding-top: 12px; border-top: 1px dashed #999; text-align: center; font-size: 13px; color: #555; }
+.no-print { margin: 15px 0; text-align: center; }
+.no-print button { padding: 10px 20px; margin: 0 5px; font-size: 15px; cursor: pointer; border-radius: 6px; border: 1px solid #555; background: #eee; }
+
+/* CSS ديناميكي حسب حجم الورق */
+{% if invoice_paper_size == "58mm" %}
+.logo-img { max-width: 140px; max-height: 60px; }
+.logo-text { font-size: 32px; }
+body { font-size: 11px; padding: 6px; max-width: 58mm; }
+.info { grid-template-columns: 1fr; }
+.totals { width: 100%; }
+{% elif invoice_paper_size == "80mm" %}
+.logo-img { max-width: 220px; max-height: 90px; }
+.logo-text { font-size: 40px; }
+body { font-size: 12px; padding: 8px; max-width: 80mm; }
+.info { grid-template-columns: 1fr; }
+.totals { width: 100%; }
+{% else %}
+.logo-img { max-width: 300px; max-height: 120px; }
+.logo-text { font-size: 48px; }
+{% endif %}
+@media print { .no-print { display: none; } body { padding: 10px; } }
+</style>
+</head>
+<body>
+<div class="header">
+{% if invoice_logo_path %}
+<img src="/static/{{ invoice_logo_path }}" alt="الشعار" class="logo-img">
+{% elif invoice_logo_text %}
+<div class="logo-text">{{ invoice_logo_text }}</div>
+{% endif %}
+<h1>{{ invoice_store_name or company_name or "فاتورة بيع" }}</h1>
+{% if invoice_address %}<p>{{ invoice_address }}</p>{% endif %}
+{% if invoice_phone %}<p>☎ {{ invoice_phone }}</p>{% endif %}
+</div>
+
+<div class="doc-title">فاتورة بيع رقم <strong>{{ sale.invoice_no }}</strong> — {{ sale.invoice_date }}</div>
+
+<div class="info">
+<div><strong>العميل:</strong> {{ sale.customer_name or "عميل نقدي" }}</div>
+<div><strong>المخزن:</strong> {{ sale.warehouse_name or "-" }}</div>
+<div><strong>طريقة الدفع:</strong> {% if sale.payment_method == "cash" %}نقدي{% elif sale.payment_method == "credit" %}آجل{% elif sale.payment_method == "bank_ahly" %}شام كاش{% elif sale.payment_method == "bank_misr" %}ماستر كارد{% else %}{{ sale.payment_method }}{% endif %}</div>
+<div><strong>الحالة:</strong> {% if sale.status == "approved" %}معتمدة{% else %}مسودة{% endif %}</div>
+</div>
+{% if delivery_details %}
+<div class="info">
+<div><strong>بيانات التوصيل</strong></div>
+<div><strong>المندوب:</strong> {{ delivery_details.rep }}</div>
+<div><strong>منطقة التوصيل:</strong> {{ delivery_details.region_name or "-" }}</div>
+<div><strong>الهاتف:</strong> {{ delivery_details.phone }}</div>
+<div><strong>العنوان:</strong> {{ delivery_details.address }}</div>
+<div><strong>رسوم التوصيل:</strong> {{ "%.2f"|format(delivery_details.fees or 0) }}</div>
+</div>
+{% endif %}
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>الكود</th>
+<th>الصنف</th>
+<th>الوحدة</th>
+<th>الكمية</th>
+<th>السعر</th>
+{% if invoice_show_discount %}<th>الخصم</th>{% endif %}
+<th>الضريبة</th>
+<th>الإجمالي</th>
+</tr>
+</thead>
+<tbody>
+{% for it in items %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ it.product_code or "" }}</td>
+<td>{{ it.product_name or "" }}</td>
+<td>{{ it.unit_name or "" }}</td>
+<td>{{ "%.2f"|format(it.quantity or 0) }}</td>
+<td>{{ "%.2f"|format(it.unit_price or 0) }}</td>
+{% if invoice_show_discount %}<td>{{ "%.2f"|format(it.discount or 0) }}</td>{% endif %}
+<td>{{ "%.2f"|format(it.tax_amount or 0) }}</td>
+<td>{{ "%.2f"|format(it.line_total or 0) }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<table class="totals">
+<tr><td>الإجمالي قبل الخصم</td><td>{{ "%.2f"|format(sale.subtotal or 0) }}</td></tr>
+{% if invoice_show_discount %}
+<tr><td>الخصم</td><td>{{ "%.2f"|format(sale.discount_total or 0) }}</td></tr>
+{% endif %}
+<tr><td>الضريبة</td><td>{{ "%.2f"|format(sale.tax_total or 0) }}</td></tr>
+<tr><td>الإجمالي النهائي</td><td>{{ "%.2f"|format(sale.grand_total or 0) }}</td></tr>
+<tr><td>المدفوع</td><td>{{ "%.2f"|format(sale.paid_amount or 0) }}</td></tr>
+<tr><td>المتبقي</td><td>{{ "%.2f"|format(sale.remaining_amount or 0) }}</td></tr>
+</table>
+
+{% if invoice_show_cashier and user %}
+<div class="footer">الكاشير: {{ user.full_name }}</div>
+{% endif %}
+{% if invoice_footer %}
+<div class="footer">{{ invoice_footer }}</div>
+{% endif %}
+
+<div class="no-print">
+<button onclick="window.print()">🖨️ طباعة</button>
+<button onclick="window.close()">إغلاق</button>
+</div>
+<script>window.addEventListener("load", () => { setTimeout(() => window.print(), 300); });</script>
+</body>
+</html>

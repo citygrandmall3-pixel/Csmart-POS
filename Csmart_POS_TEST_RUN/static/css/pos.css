@@ -1,0 +1,634 @@
+/* =====================================================
+   Modern Arabic POS - Responsive Interface
+   Version: 20261010_01
+   ===================================================== */
+
+#message {
+    position: relative;
+    z-index: 20;
+}
+
+#message > div {
+    border-radius: 12px !important;
+    padding: 13px 16px !important;
+    box-shadow: 0 4px 15px rgba(15, 23, 42, .07);
+    font-weight: 600;
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+
+.page-header h1 {
+    margin: 0 0 7px;
+    color: #172554;
+    font-size: clamp(22px, 3vw, 30px);
+    font-weight: 800;
+    letter-spacing: -.5px;
+}
+
+.page-header p {
+    margin: 0;
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.page-header button {
+    min-height: 45px;
+    padding: 11px 20px;
+    border: 0;
+    border-radius: 12px;
+    background: #0f766e;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 5px 14px rgba(15, 118, 110, .18);
+    transition: transform .15s, background .15s;
+}
+
+.page-header button:hover {
+    background: #115e59;
+    transform: translateY(-1px);
+}
+
+#salesListCard,
+#saleFormCard,
+#saleDetailsCard {
+    margin-bottom: 22px;
+    padding: clamp(14px, 2.5vw, 24px);
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, .055);
+    min-width: 0;
+}
+
+#salesListCard h2,
+#saleFormCard h2,
+#saleDetailsCard h2 {
+    color: #172554;
+    font-size: 20px;
+    font-weight: 800;
+    margin-top: 0;
+}
+
+#saleFormCard h2,
+#saleDetailsCard h2 {
+    margin-bottom: 8px;
+}
+
+#saleFormCard hr,
+#saleDetailsCard hr {
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+    margin: 20px 0;
+}
+
+#saleFormCard > div:first-child,
+#saleDetailsCard > div:first-child {
+    align-items: center;
+}
+
+#saleFormCard label,
+#saleDetailsCard label {
+    display: block;
+    margin-bottom: 7px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#saleFormCard input,
+#saleFormCard select,
+#saleFormCard textarea,
+#saleDetailsCard input,
+#saleDetailsCard select,
+#saleDetailsCard textarea {
+    width: 100%;
+    max-width: 100%;
+    min-height: 43px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #fff;
+    color: #0f172a;
+    font: inherit;
+    font-size: 14px;
+    transition: border-color .15s, box-shadow .15s;
+}
+
+#saleFormCard textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+#saleFormCard input:focus,
+#saleFormCard select:focus,
+#saleFormCard textarea:focus,
+#saleDetailsCard input:focus,
+#saleDetailsCard select:focus,
+#saleDetailsCard textarea:focus {
+    outline: none;
+    border-color: #0d9488;
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, .12);
+}
+
+#saleFormCard input[readonly] {
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 700;
+}
+
+#saleFormCard .form-grid,
+#saleDetailsCard .form-grid {
+    gap: 16px;
+}
+
+#saleFormCard button,
+#saleDetailsCard button {
+    min-height: 39px;
+    padding: 9px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, transform .15s;
+}
+
+#saleFormCard button:hover,
+#saleDetailsCard button:hover {
+    border-color: #0d9488;
+    background: #f0fdfa;
+}
+
+#saleFormCard #saveSaleBtn,
+#saleDetailsCard #addItemBtn,
+#saleDetailsCard #itemForm button[onclick="saveItem()"] {
+    border-color: #0f766e;
+    background: #0f766e;
+    color: #fff;
+}
+
+#saleFormCard #saveSaleBtn:hover,
+#saleDetailsCard #addItemBtn:hover,
+#saleDetailsCard #itemForm button[onclick="saveItem()"]:hover {
+    background: #115e59;
+}
+
+#saleFormCard #approveSaleBtn {
+    border-color: #15803d;
+    background: #15803d;
+    color: #fff;
+}
+
+#saleFormCard #deleteSaleBtn {
+    border-color: #dc2626;
+    color: #b91c1c;
+}
+
+#saleDetailsCard #barcodeSaleBox {
+    padding: 17px !important;
+    border: 1px solid #99f6e4 !important;
+    border-radius: 15px !important;
+    background: linear-gradient(135deg, #f0fdfa, #f8fafc);
+}
+
+#saleBarcodeInput {
+    min-height: 51px !important;
+    border: 2px solid #0d9488 !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    letter-spacing: .4px;
+}
+
+#saleBarcodeInput:focus {
+    box-shadow: 0 0 0 4px rgba(13, 148, 136, .15) !important;
+}
+
+#barcodeSaleBox button {
+    min-height: 49px;
+    border-color: #0f766e;
+    background: #0f766e;
+    color: #fff;
+}
+
+#barcodeSaleMessage {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.8;
+}
+
+#itemForm {
+    margin: 16px 0;
+    padding: 18px;
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+#saleDetailsCard > div[style*="overflow-x:auto"],
+#salesListCard > div[style*="overflow-x:auto"] {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+#saleDetailsCard table,
+#salesListCard table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+}
+
+#saleDetailsCard th,
+#salesListCard th {
+    padding: 13px 12px;
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 800;
+    text-align: right;
+    white-space: nowrap;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+#saleDetailsCard td,
+#salesListCard td {
+    padding: 12px;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    white-space: nowrap;
+    text-align: right;
+}
+
+#saleDetailsCard tbody tr:last-child td,
+#salesListCard tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+#saleDetailsCard tbody tr:hover,
+#salesListCard tbody tr:hover {
+    background: #f8fafc;
+}
+
+#saleDetailsCard #itemsTableBody button {
+    min-height: 34px;
+    padding: 6px 9px;
+    margin: 2px;
+}
+
+#detailHeader {
+    color: #64748b;
+    font-size: 13px;
+    line-height: 2;
+}
+
+#detailHeader strong {
+    color: #0f766e;
+    font-size: 15px;
+}
+
+#saleDetailsCard > .form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+}
+
+#saleDetailsCard > .form-grid > div {
+    padding: 15px;
+    border: 1px solid #e2e8f0;
+    border-radius: 13px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.9;
+}
+
+#saleDetailsCard > .form-grid > div strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #475569;
+}
+
+#saleDetailsCard #grandTotalText {
+    color: #0f766e;
+    font-size: clamp(21px, 3vw, 28px);
+    font-weight: 900;
+}
+
+#saleDetailsCard #remainingText {
+    color: #b91c1c;
+    font-size: 21px;
+    font-weight: 800;
+}
+
+#saleDetailsCard #paidText {
+    color: #15803d;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+#saleDetailsCard #subtotalText,
+#saleDetailsCard #discountText,
+#saleDetailsCard #taxText {
+    font-size: 17px;
+    font-weight: 800;
+}
+
+#salesListCard {
+    overflow: hidden;
+}
+
+#salesListCard h2 {
+    margin-bottom: 17px;
+}
+
+#saleStatusText {
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.8;
+}
+
+@media (min-width: 1000px) {
+    #saleFormCard .form-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    #saleDetailsCard #itemForm .form-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .page-header {
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .page-header > div:last-child,
+    .page-header > div:last-child button {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #salesListCard,
+    #saleFormCard,
+    #saleDetailsCard {
+        padding: 13px;
+        margin-bottom: 14px;
+        border-radius: 14px;
+    }
+
+    #saleFormCard .form-grid,
+    #saleDetailsCard #itemForm .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    #saleFormCard .form-grid > div,
+    #saleDetailsCard #itemForm .form-grid > div {
+        min-width: 0;
+    }
+
+    #saleDetailsCard > .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+    }
+
+    #saleDetailsCard > .form-grid > div {
+        padding: 12px;
+    }
+
+    #saleDetailsCard > div:first-child,
+    #saleFormCard > div:first-child {
+        flex-wrap: wrap;
+    }
+
+    #saleDetailsCard > div:first-child > button,
+    #saleFormCard > div:first-child > button {
+        flex-shrink: 0;
+    }
+
+    #barcodeSaleBox > div:first-child {
+        align-items: stretch !important;
+    }
+
+    #barcodeSaleBox > div:first-child > div {
+        min-width: 100% !important;
+    }
+
+    #barcodeSaleBox > div:first-child > button {
+        width: 100%;
+    }
+
+    #saleDetailsCard th,
+    #salesListCard th,
+    #saleDetailsCard td,
+    #salesListCard td {
+        padding: 10px 9px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 380px) {
+    #saleFormCard .form-grid,
+    #saleDetailsCard #itemForm .form-grid,
+    #saleDetailsCard > .form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #saleFormCard .form-grid > div[style*="grid-column"],
+    #saleDetailsCard #itemForm .form-grid > div[style*="grid-column"] {
+        grid-column: auto !important;
+    }
+}
+
+@media print {
+    #salesListCard,
+    #saleFormCard,
+    .page-header,
+    #message,
+    #barcodeSaleBox,
+    #itemForm,
+    #addItemButtonWrap,
+    #saleDetailsCard > div:first-child > button,
+    #saleDetailsCard #itemsTableBody button {
+        display: none !important;
+    }
+
+    #saleDetailsCard {
+        display: block !important;
+        border: 0;
+        box-shadow: none;
+        padding: 0;
+    }
+
+    body {
+        background: #fff !important;
+    }
+}
+
+
+/* POS searchable product catalog */
+#productCatalog {
+    margin: 16px 0;
+    padding: 16px;
+    border: 1px solid #dce7ed;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #fff, #f4f9fb);
+}
+#productCatalog .pos-catalog-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+#productCatalog .pos-catalog-heading h3 { margin: 0 0 5px; color: #15324b; }
+#productCatalog .pos-catalog-heading p { margin: 0; color: #64748b; font-size: .9rem; }
+#productCatalogCount {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #e2f7f4;
+    color: #087f78;
+    font-weight: 700;
+}
+#productCatalog #productSearchInput {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 46px;
+    margin: 4px 0 14px;
+    padding: 10px 14px;
+    border: 1px solid #cbd9e2;
+    border-radius: 12px;
+    background: white;
+    font-size: 1rem;
+}
+#productCatalog #productSearchInput:focus { outline: 2px solid #91ded7; border-color: #159e98; }
+#productCatalogGrid.pos-product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 10px;
+}
+#productCatalogGrid .pos-product-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    min-height: 125px;
+    padding: 13px;
+    border: 1px solid #dce6ec;
+    border-radius: 13px;
+    background: #fff;
+    color: #1e3447;
+    text-align: right;
+    white-space: normal;
+}
+#productCatalogGrid .pos-product-card:hover:not(:disabled) {
+    border-color: #19a69d;
+    box-shadow: 0 6px 16px rgba(22,70,85,.09);
+}
+#productCatalogGrid .pos-product-card:disabled { opacity: .65; cursor: wait; }
+#productCatalogGrid .pos-product-card strong { overflow-wrap: anywhere; min-height: 2.6em; line-height: 1.3; }
+#productCatalogGrid .pos-product-code,
+#productCatalogGrid .pos-product-unit { color: #718096; font-size: .78rem; }
+#productCatalogGrid .pos-product-add { margin-top: auto; color: #087f78; font-weight: 800; }
+#productCatalogGrid .pos-catalog-empty {
+    grid-column: 1 / -1;
+    padding: 20px;
+    border: 1px dashed #cbd9e2;
+    border-radius: 12px;
+    color: #64748b;
+    text-align: center;
+}
+#productCatalogMessage { min-height: 22px; margin-top: 9px; font-size: .9rem; }
+#productCatalogMessage.success { color: #087f5b; }
+#productCatalogMessage.error { color: #b42318; }
+@media (max-width: 600px) {
+    #productCatalog { padding: 11px; }
+    #productCatalog .pos-catalog-heading { align-items: flex-start; flex-direction: column; }
+    #productCatalogGrid.pos-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    #productCatalogGrid .pos-product-card { min-height: 115px; padding: 10px; }
+}
+
+/* POS refresh */
+.page-header{background:linear-gradient(135deg,#102f50,#174d75)!important;color:#fff!important;padding:22px 24px!important;border-radius:16px!important;margin-bottom:20px!important}
+.page-header h1,.page-header p{color:#fff!important}
+#barcodeSaleBox{background:#f1f7fb!important;border:2px solid #c9dce9!important;border-radius:14px!important;padding:17px!important}
+#saleBarcodeInput{box-sizing:border-box!important;width:100%!important;min-height:54px!important;border:2px solid #a9c4d7!important;border-radius:11px!important;font-size:18px!important;padding:12px!important}
+#productCatalog{background:#fff!important;border:1px solid #e0e8ef!important;border-radius:14px!important}
+#productCatalogGrid .pos-product-card{border-radius:12px!important}
+
+/* POS single-screen adjustment */
+#saleFormCard, #saleDetailsCard { width: 100%; box-sizing: border-box; }
+#saleFormCard #warehouseId { display: none !important; }
+#saleBarcodeInput { color: #111827 !important; -webkit-text-fill-color: #111827 !important; caret-color: #111827 !important; background: #fff !important; opacity: 1 !important; }
+
+/* POS CASHIER REDESIGN 20261012 */
+#saleFormCard,#saleDetailsCard{width:100%;box-sizing:border-box;border-radius:16px;padding:16px;margin:0 0 14px}
+#saleFormCard .form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#saleForm .form-grid>div:has(#warehouseId),#saleForm .form-grid>div:has(#customerInvoiceNo),#saleForm .form-grid>div:has(#notes){display:none}
+#saleForm .form-grid>div:has(#paymentMethod){grid-column:span 2}
+#barcodeSaleBox{background:#f0fdfa;border:2px solid #99f6e4;border-radius:16px;padding:16px}
+#saleBarcodeInput{width:100%;box-sizing:border-box;min-height:56px;font-size:20px;color:#111827;-webkit-text-fill-color:#111827;caret-color:#111827;background:#fff}
+#saleDetailsCard #grandTotalText{font-size:1.6rem;font-weight:900}
+@media(max-width:700px){#saleFormCard,#saleDetailsCard{padding:11px}#saleFormCard .form-grid,#saleDetailsCard>.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#saleForm .form-grid>div:has(#paymentMethod){grid-column:span 2}}
+
+#saleDetailsCard{display:block!important}#saleDetailsCard #itemsEditor,#saleDetailsCard #productCatalog,#saleDetailsCard #productCatalogGrid,#saleDetailsCard #itemsTableBody{display:block;visibility:visible;opacity:1}#saleDetailsCard #productCatalogGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}#saleFormCard #paymentMethod{display:block!important;visibility:visible!important;opacity:1!important}#saleFormCard .form-grid>div:has(#paymentMethod){display:block!important;grid-column:span 2}#saleDetailsCard table{display:table!important;width:100%}#saleDetailsCard #itemsTableBody tr{display:table-row!important}@media(max-width:700px){#saleFormCard .form-grid>div:has(#paymentMethod){grid-column:1/-1}}
+/* === Payment Modal === */
+.payment-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 10px; }
+.payment-modal-content { background: #fff; border-radius: 12px; width: 100%; max-width: 700px; max-height: 92vh; overflow: auto; }
+.payment-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #eee; }
+.payment-modal-close { background: #e74c3c; color: #fff; border: 0; width: 36px; height: 36px; border-radius: 6px; font-size: 22px; cursor: pointer; }
+.payment-modal-body { display: flex; gap: 12px; padding: 12px; flex-wrap: wrap; }
+.payment-left { flex: 1; min-width: 260px; }
+.payment-right { flex: 1; min-width: 220px; background: #f7f7f7; border-radius: 8px; padding: 12px; }
+.payment-display { background: #2c3e50; color: #fff; font-size: 28px; text-align: center; padding: 14px; border-radius: 8px; margin-bottom: 10px; font-weight: bold; }
+.payment-keypad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+.pay-key { padding: 14px; font-size: 18px; background: #34495e; color: #fff; border: 0; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.pay-key:active { background: #2c3e50; }
+.payment-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.pay-method-btn { padding: 12px; border: 0; border-radius: 6px; font-weight: bold; color: #fff; cursor: pointer; font-size: 15px; }
+.pay-method-btn[data-method="cash"] { background: #27ae60; }
+.pay-method-btn[data-method="bank_ahly"] { background: #2980b9; }
+.pay-method-btn.active { box-shadow: 0 0 0 3px #f1c40f; }
+.payment-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+.pay-quick { padding: 10px; background: #f39c12; color: #fff; border: 0; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.payment-confirm { width: 100%; padding: 14px; background: #27ae60; color: #fff; border: 0; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
+.payment-cancel { width: 100%; padding: 12px; background: #7f8c8d; color: #fff; border: 0; border-radius: 8px; cursor: pointer; font-size: 15px; }
+.payment-summary-title { font-weight: bold; font-size: 17px; margin-bottom: 10px; text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+.payment-summary-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e0e0e0; font-size: 15px; }
+.payment-summary-row.total { font-weight: bold; }
+.payment-summary-row.due { color: #c0392b; font-size: 17px; font-weight: bold; }
+.payment-summary-row.change { color: #27ae60; font-weight: bold; }
+
+/* إصلاح تراص الجدول */
+#saleDetailsCard table { table-layout: fixed; }
+#saleDetailsCard th:nth-child(1), #saleDetailsCard td:nth-child(1) { width: 38px; text-align: center; }
+#saleDetailsCard th:nth-child(2), #saleDetailsCard td:nth-child(2) { width: 90px; }
+#saleDetailsCard th:nth-child(3), #saleDetailsCard td:nth-child(3) { width: 30%; }
+#saleDetailsCard th:nth-child(4), #saleDetailsCard td:nth-child(4) { width: 70px; }
+#saleDetailsCard th:nth-child(5), #saleDetailsCard td:nth-child(5) { width: 60px; }
+#saleDetailsCard th:nth-child(6), #saleDetailsCard td:nth-child(6) { width: 80px; }
+#saleDetailsCard th:nth-child(7), #saleDetailsCard td:nth-child(7) { width: 60px; }
+#saleDetailsCard th:nth-child(8), #saleDetailsCard td:nth-child(8) { width: 60px; }
+#saleDetailsCard th:nth-child(9), #saleDetailsCard td:nth-child(9) { width: 80px; }
+#saleDetailsCard th:nth-child(10), #saleDetailsCard td:nth-child(10) { width: 80px; }
+#saleDetailsCard td { overflow: hidden; text-overflow: ellipsis; }

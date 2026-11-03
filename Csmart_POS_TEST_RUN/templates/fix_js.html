@@ -1,0 +1,21 @@
+<script>
+function updateInvoiceSummary() {
+    let rows = document.querySelectorAll("#saleItemsTable tbody tr");
+    let totalItems = rows.length;
+    let totalPrice = 0;
+    rows.forEach(function(row) {
+        let cells = row.querySelectorAll("td");
+        if (cells.length > 0) {
+            let totalCellText = cells[cells.length - 1].innerText.replace(/[^0-9.]/g, "");
+            totalPrice += parseFloat(totalCellText) || 0;
+        }
+    });
+    let itemsEl = document.getElementById("summaryTotalItems");
+    let priceEl = document.getElementById("summaryTotalPrice");
+    if (itemsEl) itemsEl.innerText = totalItems;
+    if (priceEl) priceEl.innerText = totalPrice.toFixed(2) + " ج.م";
+}
+document.addEventListener("click", function() {
+    setTimeout(updateInvoiceSummary, 300);
+});
+</script>

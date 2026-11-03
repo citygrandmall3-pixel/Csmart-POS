@@ -1,0 +1,82 @@
+
+/* ============================================
+   Csmart Theme - تصميم احترافي
+   ============================================ */
+
+:root {
+    --ss-bg: #1a1a2e;
+    --ss-panel: #16213e;
+    --ss-primary: #0f3460;
+    --ss-accent: #e94560;
+    --ss-gold: #ffc107;
+    --ss-text: #ffffff;
+}
+
+body {
+    background-color: var(--ss-bg) !important;
+    color: var(--ss-text) !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+}
+
+.topbar, header.topbar {
+    background: linear-gradient(90deg, #16213e, #0f3460) !important;
+    border-bottom: 2px solid var(--ss-accent) !important;
+    padding: 10px 20px !important;
+}
+
+.sidebar, aside.sidebar {
+    background: #0d1321 !important;
+    border-left: 2px solid var(--ss-primary) !important;
+}
+
+.sidebar a, .nav a {
+    color: var(--ss-text) !important;
+    padding: 12px 15px !important;
+    border-bottom: 1px solid #1a1a2e !important;
+    transition: 0.2s;
+}
+
+.sidebar a:hover, .nav a:hover {
+    background: var(--ss-primary) !important;
+    color: var(--ss-gold) !important;
+}
+
+.btn-gold, .btn-primary {
+    background: var(--ss-accent) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 5px !important;
+    padding: 8px 15px !important;
+    font-weight: bold !important;
+}
+
+.btn-gold:hover, .btn-primary:hover {
+    background: #d63850 !important;
+}
+
+.card {
+    background: var(--ss-panel) !important;
+    border: 1px solid var(--ss-primary) !important;
+    border-radius: 8px !important;
+    color: var(--ss-text) !important;
+}
+
+table {
+    color: var(--ss-text) !important;
+}
+table th {
+    background: var(--ss-primary) !important;
+    color: var(--ss-gold) !important;
+    border: 1px solid #1a1a2e !important;
+}
+table td {
+    border: 1px solid #1a1a2e !important;
+}
+
+input, select, textarea {
+    background: #0d1321 !important;
+    color: white !important;
+    border: 1px solid var(--ss-primary) !important;
+    border-radius: 5px !important;
+    padding: 8px !important;
+}

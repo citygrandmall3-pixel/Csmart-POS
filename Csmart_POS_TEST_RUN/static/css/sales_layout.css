@@ -1,0 +1,201 @@
+
+/* ============================================
+   KSTORE Exact Layout - Csmart
+   ============================================ */
+
+body {
+    background: #e0e0e0;
+    font-family: Tahoma, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.kstore-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 5px;
+    box-sizing: border-box;
+}
+
+/* 1. الشريط العلوي */
+.k-header {
+    display: flex;
+    justify-content: space-between;
+    background: #d1d5db;
+    padding: 8px 15px;
+    border: 1px solid #999;
+    margin-bottom: 5px;
+    font-size: 13px;
+}
+.k-header-right, .k-header-left {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+.k-header-center {
+    flex-grow: 1;
+    margin: 0 20px;
+}
+.k-search-input {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid #999;
+}
+
+/* 2. شريط الأدوات */
+.k-toolbar {
+    display: flex;
+    gap: 10px;
+    background: #e5e7eb;
+    padding: 5px 10px;
+    border: 1px solid #999;
+    margin-bottom: 5px;
+    align-items: center;
+}
+.k-select, .k-search-small {
+    padding: 3px;
+    border: 1px solid #999;
+}
+.k-search-small {
+    width: 200px;
+}
+
+/* 3. المنطقة الوسطى (80%) */
+.k-main-area {
+    display: grid;
+    grid-template-columns: var(--products-width, 190px) 8px minmax(0,1fr) 200px; /* يمين - وسط - يسار */
+    gap: 5px;
+    flex-grow: 1;
+    height: calc(100% - 130px); /* لترك مساحة للهيدر والفوتر */
+}
+
+/* 4. العمود الأيمن */
+.k-sidebar-right {
+    background: #f3f4f6;
+    border: 1px solid #999;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+}
+.k-sidebar-right h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    text-align: center;
+    background: #b9d9eb;
+    padding: 5px;
+    border: 1px solid #999;
+}
+.k-quick-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.k-quick-btn {
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #999;
+    cursor: pointer;
+    text-align: center;
+    font-size: 13px;
+}
+
+/* 5. العمود الأوسط (الجدول) */
+.k-center-table {
+    background: #fff;
+    border: 1px solid #999;
+    overflow-y: auto;
+}
+.k-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.k-table th {
+    background: #d1d5db;
+    padding: 8px;
+    border: 1px solid #999;
+    text-align: right;
+}
+.k-table td {
+    padding: 6px;
+    border: 1px solid #ccc;
+    text-align: right;
+}
+
+/* 6. العمود الأيسر (الملخص) */
+.k-summary-left {
+    background: #f3f4f6;
+    border: 1px solid #999;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.k-summary-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid #999;
+}
+.k-total {
+    background: #fef08a; /* لون أصفر */
+    font-weight: bold;
+    font-size: 16px;
+}
+
+/* 7. الشريط السفلي */
+.k-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    background: #d1d5db;
+    padding: 8px;
+    border: 1px solid #999;
+    margin-top: 2px;
+    margin-bottom: 8px;
+    position: relative;
+    z-index: 10;
+}
+
+.k-footer-right,
+.k-footer-center,
+.k-footer-left {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.k-btn-footer {
+    padding: 12px 14px;
+    min-height: 46px;
+    background: #fff;
+    border: 1px solid #999;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.k-btn-pay {
+    padding: 13px 24px;
+    min-height: 48px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+
+/* فاصل تغيير عرض منطقة الأصناف */
+#productsResizeHandle{
+width:8px;min-width:8px;height:100%;cursor:col-resize;touch-action:none;background:#c5c5c5;border-radius:4px;align-self:stretch;position:relative;z-index:5;}
+#productsResizeHandle:hover,#productsResizeHandle:active{background:#3986c8;}

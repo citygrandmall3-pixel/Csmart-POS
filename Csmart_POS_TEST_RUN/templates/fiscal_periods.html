@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}السنوات والفترات المالية{% endblock %}
+{% block page_title %}السنوات والفترات المالية 🗓️{% endblock %}
+{% block content %}
+<div class="grid-2">
+  <div class="panel">
+    <div class="panel-head"><h3>➕ إنشاء سنة مالية</h3></div>
+    <div class="panel-body">
+      <div class="field"><label>اسم السنة المالية</label><input id="fy-name" placeholder="مثال: 2027"></div>
+      <div class="field"><label>من تاريخ</label><input id="fy-from" type="date"></div>
+      <div class="field"><label>إلى تاريخ</label><input id="fy-to" type="date"></div>
+      <button class="btn btn-gold" onclick="createFY()">💾 إنشاء السنة والفترات</button>
+      <div class="hint" style="margin-top:10px">سيُنشئ النظام الفترات الشهرية تلقائيًا ويمنع القيود في أي فترة مغلقة.</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>📚 السنوات المالية</h3></div>
+    <div class="panel-body"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>السنة</th><th>من</th><th>إلى</th><th>الحالة</th><th>الفترات</th><th>إجراء</th></tr></thead><tbody id="fy-body"></tbody></table></div></div>
+  </div>
+  <div class="panel" style="grid-column:span 2">
+    <div class="panel-head"><h3>📅 فترات السنة المحددة</h3><select id="fy-select" onchange="loadPeriods()" style="max-width:220px"></select></div>
+    <div class="panel-body"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>الفترة</th><th>من</th><th>إلى</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="period-body"></tbody></table></div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let FY=[];
+async function loadFY(){
+  try{ const d=await api('/api/fiscal-years'); FY=d.fiscal_years||[];
+    $('#fy-body').innerHTML=FY.map(f=>`<tr><td>${esc(f.name)}</td><td>${esc(f.date_from)}</td><td>${esc(f.date_to)}</td><td>${f.status==='open'?'<span class="badge posted">مفتوحة</span>':'<span class="badge draft">مغلقة</span>'}</td><td>${f.closed_periods}/${f.period_count}</td><td>${f.status==='open'?`<button class="btn btn-sm btn-gold" onclick="closeFY(${f.id})">🔒 إغلاق السنة</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="empty-state">لا توجد سنوات مالية</td></tr>';
+    $('#fy-select').innerHTML=FY.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join('');
+    loadPeriods();
+  }catch(e){toast(e.message,'err')}
+}
+async function loadPeriods(){
+  const id=$('#fy-select').value; const f=FY.find(x=>String(x.id)===String(id));
+  if(!f){$('#period-body').innerHTML='';return;}
+  try{ const d=await api(`/api/fiscal-years/${id}/periods`); const ps=d.periods||[];
+    $('#period-body').innerHTML=ps.map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(p.date_from)}</td><td>${esc(p.date_to)}</td><td>${p.status==='open'?'<span class="badge posted">مفتوحة</span>':'<span class="badge draft">مغلقة</span>'}</td><td>${f.status==='open'?(p.status==='open'?`<button class="btn btn-sm btn-gold" onclick="closeP(${p.id})">🔒 إغلاق</button>`:`<button class="btn btn-sm btn-teal" onclick="openP(${p.id})">🔓 فتح</button>`):'—'}</td></tr>`).join('');
+  }catch(e){toast(e.message,'err')}
+}
+async function createFY(){
+ const name=$('#fy-name').value.trim(), df=$('#fy-from').value, dt=$('#fy-to').value; if(!name||!df||!dt)return toast('أكمل بيانات السنة المالية','err');
+ try{await api('/api/fiscal-years',{method:'POST',body:{name,date_from:df,date_to:dt}});toast('تم إنشاء السنة والفترات ✔');$('#fy-name').value='';loadFY();}catch(e){toast(e.message,'err')}
+}
+async function closeP(id){if(!await confirmDlg('إغلاق الفترة؟ لن يمكن إنشاء أو ترحيل قيود فيها.'))return;try{await api(`/api/accounting-periods/${id}/close`,{method:'POST'});toast('تم إغلاق الفترة ✔');loadFY();}catch(e){toast(e.message,'err')}}
+async function openP(id){if(!await confirmDlg('إعادة فتح الفترة؟'))return;try{await api(`/api/accounting-periods/${id}/open`,{method:'POST'});toast('تم فتح الفترة ✔');loadFY();}catch(e){toast(e.message,'err')}}
+async function closeFY(id){if(!await confirmDlg('إغلاق السنة المالية نهائيًا بعد إغلاق جميع فتراتها؟'))return;try{await api(`/api/fiscal-years/${id}/close`,{method:'POST'});toast('تم إغلاق السنة ✔');loadFY();}catch(e){toast(e.message,'err')}}
+loadFY();
+</script>
+{% endblock %}

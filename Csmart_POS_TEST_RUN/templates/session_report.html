@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>تقرير إغلاق الوردية</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; }
+        .report-box { border: 2px solid #333; padding: 20px; width: 400px; margin: auto; text-align: right; }
+        h2 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .row { display: flex; justify-content: space-between; margin: 10px 0; font-size: 16px; }
+        .total { font-weight: bold; font-size: 18px; border-top: 1px dashed #333; padding-top: 10px; }
+        .btn-print { margin-top: 20px; padding: 10px 20px; font-size: 16px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; }
+        @media print { .btn-print { display: none; } }
+    </style>
+
+<style>
+    body { color: #222 !important; }
+    .row { color: #222 !important; }
+    .row span, .row strong { color: #222 !important; }
+    .total { color: #000 !important; font-weight: bold !important; }
+    .report-box { color: #222 !important; }
+    h2 { color: #000 !important; }
+    hr { border-color: #999 !important; }
+</style>
+
+<style>
+    /* جعل النص أبيض واضحاً على الخلفية الداكنة */
+    body, .row, .row span, .row strong, .total, .report-box, h2, hr, label {
+        color: #ffffff !important;
+    }
+    /* تخصيص الحقول (لأنها بخلفية داكنة) */
+    input, textarea, select {
+        color: #ffffff !important;
+        background-color: #1e1e2f !important;
+        border-color: #444 !important;
+    }
+    /* تغيير لون الفرق (عجز/زيادة) ليبقى مميزاً */
+    .difference-red { color: #ff6b6b !important; }
+    .difference-green { color: #51cf66 !important; }
+</style>
+</head>
+<body onload="window.print()">
+    <div class="report-box">
+        <h2>🧾 تقرير إغلاق الوردية (Z-Report)</h2>
+        <div class="row"><span>رقم الوردية:</span> <strong>{{ session.id }}</strong></div>
+        <div class="row"><span>الموظف:</span> <strong>{{ session.user_name }}</strong></div>
+        <div class="row"><span>تاريخ الإغلاق:</span> <strong>{{ session.closed_at }}</strong></div>
+        <hr>
+        <div class="row"><span>عدد الفواتير:</span> <strong>{{ session.invoice_count }}</strong></div>
+        <div class="row"><span>إجمالي المبيعات:</span> <strong>{{ session.total_sales }} ل.س</strong></div>
+        <hr>
+        <div class="row"><span>النقد الافتتاحي:</span> <strong>{{ session.opening_cash }} ل.س</strong></div>
+        <div class="row"><span>المبيعات النقدية:</span> <strong>{{ session.cash_sales }} ل.س</strong></div>
+        <div class="row" style="color: red;"><span>إجمالي المصروفات:</span> <strong>- {{ session.expenses_total }} ل.س</strong></div>
+        <div class="row" style="color: red;"><span>إجمالي المرتجعات:</span> <strong>- {{ session.returns_total }} ل.س</strong></div>
+        <div class="row total"><span>النقد المتوقع:</span> <strong>{{ session.expected_cash }} ل.س</strong></div>
+        <hr>
+        <div class="row"><span>النقد الفعلي:</span> <strong>{{ session.actual_cash }} ل.س</strong></div>
+        <div class="row total" style="color: {{ 'red' if session.difference < 0 else 'green' }};">
+            <span>الفرق:</span> <strong>{{ session.difference }} ل.س</strong>
+        </div>
+    </div>
+    <button class="btn-print" onclick="window.print()">🖨️ طباعة</button>
+    <button class="btn-print" onclick="window.close()" style="background:#dc3545;">إغلاق</button>
+</body>
+</html>
