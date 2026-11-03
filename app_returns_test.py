@@ -11988,6 +11988,340 @@ def api_pos_inventory_list():
         return jsonify(ok=False, error=str(e))
 
 
+
+@app.route("/api/pos-inventory/purchase-return-options/<int:product_id>", methods=["GET"])
+@require_write
+def api_pos_purchase_return_options(product_id):
+    company_id = _current_company_id()
+    if not company_id:
+        return jsonify(ok=False, error="لا توجد شركة حالية"), 400
+    try:
+        with db.connect() as conn:
+            warehouse = conn.execute(
+                "SELECT id FROM warehouses WHERE id=3 AND company_id=? AND is_active=1",
+                (company_id,),
+            ).fetchone()
+            if not warehouse:
+                return jsonify(ok=False, error="مخزن نقطة البيع رقم 3 غير موجود أو غير نشط"), 400
+            product = conn.execute(
+                "SELECT id, is_stock_item FROM products WHERE id=? AND company_id=? AND is_active=1",
+                (product_id, company_id),
+            ).fetchone()
+            if not product or not product["is_stock_item"]:
+                return jsonify(ok=False, error="الصنف غير موجود أو غير مخزني"), 404
+            stock = conn.execute(
+                "SELECT COALESCE(quantity,0) AS qty FROM warehouse_stock WHERE company_id=? AND warehouse_id=3 AND product_id=?",
+                (company_id, product_id),
+            ).fetchone()
+            pos_stock_qty = float(stock["qty"] or 0) if stock else 0.0
+            rows = conn.execute("""
+                SELECT pii.id AS purchase_item_id, pii.quantity AS original_qty,
+                       pii.unit_price, pii.discount, pii.tax_rate, pii.tax_amount, pii.line_total,
+                       pi.id AS purchase_id, pi.invoice_no, pi.invoice_date, pi.currency_id,
+                       bp.name AS supplier_name, u.name AS unit_name,
+                       u.decimal_places AS unit_decimal_places,
+                       p.allow_decimal_qty, c.symbol AS currency_symbol,
+                       pii.quantity - COALESCE((
+                           SELECT SUM(pri.quantity)
+                           FROM purchase_return_items pri
+                           JOIN purchase_returns pr ON pr.id=pri.return_id
+                           WHERE pri.purchase_item_id=pii.id
+                       ),0) AS remaining_qty
+                FROM purchase_invoice_items pii
+                JOIN purchase_invoices pi ON pi.id=pii.invoice_id
+                JOIN business_partners bp ON bp.id=pi.supplier_id AND bp.company_id=pi.company_id
+                JOIN products p ON p.id=pii.product_id AND p.company_id=pi.company_id
+                JOIN units u ON u.id=pii.unit_id AND u.company_id=pi.company_id
+                LEFT JOIN currencies c ON c.id=pi.currency_id
+                WHERE pi.company_id=? AND pi.status='approved'
+                  AND pii.product_id=? AND pii.quantity > COALESCE((
+                      SELECT SUM(pri.quantity)
+                      FROM purchase_return_items pri
+                      JOIN purchase_returns pr ON pr.id=pri.return_id
+                      WHERE pri.purchase_item_id=pii.id
+                  ),0)
+                ORDER BY pi.invoice_date DESC, pi.id DESC, pii.id DESC
+            """, (company_id, product_id)).fetchall()
+            options = [{
+                "purchase_item_id": int(row["purchase_item_id"]),
+                "purchase_id": int(row["purchase_id"]),
+                "invoice_no": row["invoice_no"],
+                "invoice_date": row["invoice_date"],
+                "supplier_name": row["supplier_name"],
+                "original_qty": float(row["original_qty"] or 0),
+                "remaining_qty": float(row["remaining_qty"] or 0),
+                "unit_price": float(row["unit_price"] or 0),
+                "discount": float(row["discount"] or 0),
+                "tax_rate": float(row["tax_rate"] or 0),
+                "tax_amount": float(row["tax_amount"] or 0),
+                "line_total": float(row["line_total"] or 0),
+                "unit_name": row["unit_name"] or "",
+                "unit_decimal_places": int(row["unit_decimal_places"] or 0),
+                "allow_decimal_qty": int(row["allow_decimal_qty"] or 0),
+                "currency_symbol": row["currency_symbol"] or "",
+            } for row in rows]
+        return jsonify(ok=True, product_id=product_id, pos_stock_qty=pos_stock_qty, options=options)
+    except Exception as exc:
+        return jsonify(ok=False, error=f"تعذر تحميل فواتير الشراء: {exc}"), 500
+
+
+@app.route("/api/pos-inventory/purchase-return", methods=["POST"])
+@require_write
+def api_pos_purchase_return():
+    company_id = _current_company_id()
+    if not company_id:
+        return jsonify(ok=False, error="لا توجد شركة حالية"), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        purchase_item_id = int(data.get("purchase_item_id"))
+        quantity = float(data.get("quantity"))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error="بند فاتورة الشراء أو الكمية غير صالح"), 400
+    request_id = str(data.get("request_id") or "").strip()
+    reason = _sanitize(str(data.get("reason") or ""))[:250]
+    if purchase_item_id <= 0 or not math.isfinite(quantity) or quantity <= 0:
+        return jsonify(ok=False, error="الكمية أو بند الفاتورة غير صحيح"), 400
+    if not request_id or len(request_id) > 120:
+        return jsonify(ok=False, error="معرّف الطلب مطلوب وغير صالح"), 400
+    payload_json = json.dumps({
+        "purchase_item_id": purchase_item_id,
+        "quantity": round(quantity, 6),
+        "reason": reason,
+    }, ensure_ascii=False, sort_keys=True)
+    conn = db.connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        previous_request = conn.execute(
+            "SELECT request_payload_json, response_json FROM purchase_returns WHERE company_id=? AND created_by=? AND request_id=?",
+            (company_id, g.user["id"], request_id),
+        ).fetchone()
+        if previous_request:
+            if previous_request["request_payload_json"] != payload_json:
+                conn.rollback()
+                return jsonify(ok=False, error="معرّف الطلب مستخدم لعملية مختلفة؛ أعد المحاولة بمعرّف جديد"), 409
+            saved_response = json.loads(previous_request["response_json"] or "{}")
+            conn.commit()
+            return jsonify(saved_response), 200
+
+        warehouse = conn.execute(
+            "SELECT id FROM warehouses WHERE id=3 AND company_id=? AND is_active=1",
+            (company_id,),
+        ).fetchone()
+        if not warehouse:
+            conn.rollback()
+            return jsonify(ok=False, error="مخزن نقطة البيع رقم 3 غير موجود أو غير نشط"), 400
+
+        item = conn.execute("""
+            SELECT pii.*, pi.id AS purchase_id, pi.invoice_no, pi.invoice_date,
+                   pi.supplier_id, pi.warehouse_id AS invoice_warehouse_id,
+                   pi.currency_id, pi.exchange_rate, pi.grand_total AS invoice_total,
+                   pi.paid_amount, pi.payment_method, pi.branch_id,
+                   pi.status AS invoice_status, bp.name AS supplier_name,
+                   bp.payable_account_id, p.name AS product_name,
+                   p.is_stock_item, p.allow_decimal_qty
+            FROM purchase_invoice_items pii
+            JOIN purchase_invoices pi ON pi.id=pii.invoice_id
+            JOIN business_partners bp ON bp.id=pi.supplier_id AND bp.company_id=pi.company_id
+            JOIN products p ON p.id=pii.product_id AND p.company_id=pi.company_id
+            WHERE pii.id=? AND pi.company_id=?
+        """, (purchase_item_id, company_id)).fetchone()
+        if not item or item["invoice_status"] != "approved" or not item["is_stock_item"]:
+            conn.rollback()
+            return jsonify(ok=False, error="بند فاتورة الشراء غير موجود أو الفاتورة غير معتمدة"), 404
+        original_qty = float(item["quantity"] or 0)
+        if original_qty <= 0:
+            conn.rollback()
+            return jsonify(ok=False, error="كمية بند الفاتورة الأصلية غير صحيحة"), 400
+        if not item["allow_decimal_qty"] and abs(quantity - round(quantity)) > 0.000001:
+            conn.rollback()
+            return jsonify(ok=False, error="هذا الصنف لا يسمح بالكميات العشرية"), 400
+        already_returned = float(conn.execute(
+            "SELECT COALESCE(SUM(quantity),0) AS qty FROM purchase_return_items WHERE purchase_item_id=?",
+            (purchase_item_id,),
+        ).fetchone()["qty"] or 0)
+        if quantity > original_qty - already_returned + 0.000001:
+            conn.rollback()
+            return jsonify(ok=False, error=f"الكمية تتجاوز المتبقي من الفاتورة: {max(0, original_qty-already_returned):g}"), 400
+
+        stock = conn.execute(
+            "SELECT id, quantity FROM warehouse_stock WHERE company_id=? AND warehouse_id=3 AND product_id=?",
+            (company_id, item["product_id"]),
+        ).fetchone()
+        if not stock or float(stock["quantity"] or 0) + 0.000001 < quantity:
+            conn.rollback()
+            return jsonify(ok=False, error="رصيد مخزن نقطة البيع لا يكفي لتنفيذ المرتجع"), 400
+        if not item["payable_account_id"]:
+            conn.rollback()
+            return jsonify(ok=False, error="المورد غير مرتبط بحساب دائن"), 400
+
+        return_date = date.today().isoformat()
+        period = _period_for_date(return_date, company_id)
+        period_error = _open_period_error(return_date, company_id)
+        if not period or period_error:
+            conn.rollback()
+            return jsonify(ok=False, error=period_error or "لا توجد فترة محاسبية مفتوحة لتاريخ اليوم"), 400
+        inventory_account = conn.execute(
+            "SELECT id FROM accounts WHERE company_id=? AND acc_no='1301' AND is_active=1 LIMIT 1",
+            (company_id,),
+        ).fetchone()
+        vat_account = conn.execute(
+            "SELECT id FROM accounts WHERE company_id=? AND acc_no='1202' AND is_active=1 LIMIT 1",
+            (company_id,),
+        ).fetchone()
+        supplier_account = conn.execute(
+            "SELECT id FROM accounts WHERE id=? AND company_id=? AND is_active=1",
+            (item["payable_account_id"], company_id),
+        ).fetchone()
+        if not inventory_account or not vat_account or not supplier_account:
+            conn.rollback()
+            return jsonify(ok=False, error="حساب المخزون أو ضريبة المدخلات أو حساب المورد غير موجود أو غير نشط"), 400
+        branch_id = item["branch_id"]
+        if not branch_id:
+            branch = conn.execute(
+                "SELECT id FROM branches WHERE company_id=? ORDER BY id LIMIT 1",
+                (company_id,),
+            ).fetchone()
+            branch_id = branch["id"] if branch else None
+        if not branch_id:
+            conn.rollback()
+            return jsonify(ok=False, error="لا يوجد فرع للشركة الحالية"), 400
+
+        line_total = float(item["line_total"] or 0)
+        tax_total = float(item["tax_amount"] or 0)
+        discount_total = float(item["discount"] or 0)
+        if line_total < 0 or tax_total < 0 or discount_total < 0:
+            conn.rollback()
+            return jsonify(ok=False, error="قيم بند فاتورة الشراء غير صحيحة"), 400
+        before_ratio = already_returned / original_qty
+        after_ratio = min(1.0, (already_returned + quantity) / original_qty)
+        total_amount = round(round(line_total * after_ratio, 2) - round(line_total * before_ratio, 2), 2)
+        tax_amount = round(round(tax_total * after_ratio, 2) - round(tax_total * before_ratio, 2), 2)
+        discount_amount = round(round(discount_total * after_ratio, 2) - round(discount_total * before_ratio, 2), 2)
+        net_amount = round(total_amount - tax_amount, 2)
+        if net_amount < -0.005 or tax_amount < -0.005 or total_amount < -0.005:
+            conn.rollback()
+            return jsonify(ok=False, error="تعذر احتساب قيمة المرتجع من بيانات بند الفاتورة"), 400
+        net_amount = max(0.0, net_amount)
+        tax_amount = max(0.0, tax_amount)
+        total_amount = round(net_amount + tax_amount, 2)
+
+        movement_no = next_movement_no()
+        while conn.execute("SELECT id FROM journal_entries WHERE movement_no=?", (movement_no,)).fetchone():
+            movement_no = str(int(movement_no) + 1)
+        entry_id = conn.execute("""
+            INSERT INTO journal_entries
+            (movement_no, entry_date, description, region, status, entry_type, created_by,
+             company_id, branch_id, fiscal_year_id, period_id, currency_id, exchange_rate)
+            VALUES (?, ?, ?, ?, 'posted', 'عادي', ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            movement_no, return_date,
+            f"مرتجع شراء {item['invoice_no']} - {item['supplier_name']}",
+            "المركز الرئيسي", g.user["id"], company_id, branch_id,
+            period["fiscal_year_id"], period["id"], item["currency_id"],
+            float(item["exchange_rate"] or 1),
+        )).lastrowid
+
+        return_no = "PR-" + datetime.now().strftime("%Y%m%d%H%M%S%f")
+        return_id = conn.execute("""
+            INSERT INTO purchase_returns
+            (company_id, purchase_id, supplier_id, warehouse_id, return_no, return_date,
+             reason, net_amount, tax_amount, total_amount, currency_id, exchange_rate,
+             journal_entry_id, request_id, request_payload_json, response_json, created_by)
+            VALUES (?, ?, ?, 3, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)
+        """, (
+            company_id, item["purchase_id"], item["supplier_id"], return_no,
+            return_date, reason, net_amount, tax_amount, total_amount,
+            item["currency_id"], float(item["exchange_rate"] or 1),
+            entry_id, request_id, payload_json, g.user["id"],
+        )).lastrowid
+
+        conn.execute("""
+            INSERT INTO purchase_return_items
+            (return_id, purchase_item_id, product_id, unit_id, quantity, unit_price,
+             discount_amount, net_amount, tax_rate, tax_amount, total_amount)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            return_id, purchase_item_id, item["product_id"], item["unit_id"],
+            quantity, float(item["unit_price"] or 0), discount_amount,
+            net_amount, float(item["tax_rate"] or 0), tax_amount, total_amount,
+        ))
+        conn.execute(
+            "UPDATE warehouse_stock SET quantity=quantity-?, updated_at=datetime('now','localtime') WHERE id=? AND quantity>=?",
+            (quantity, stock["id"], quantity),
+        )
+        if conn.execute("SELECT changes()").fetchone()[0] != 1:
+            conn.rollback()
+            return jsonify(ok=False, error="تغير رصيد المخزون أثناء التنفيذ؛ أعد المحاولة"), 409
+        conn.execute("""
+            INSERT INTO stock_movements
+            (company_id, warehouse_id, product_id, unit_id, movement_type, quantity,
+             reference_type, reference_id, movement_date, notes, created_by)
+            VALUES (?, 3, ?, ?, 'out', ?, 'purchase_return', ?, ?, ?, ?)
+        """, (
+            company_id, item["product_id"], item["unit_id"], quantity,
+            return_id, return_date, f"مرتجع شراء {return_no} من مخزن POS", g.user["id"],
+        ))
+
+        # المرتجع يخفض التزام المورد؛ لا نغيّر المدفوعات ولا نسمح بمتبقٍ سالب.
+        cumulative_returns = float(conn.execute(
+            "SELECT COALESCE(SUM(total_amount),0) AS total FROM purchase_returns WHERE purchase_id=?",
+            (item["purchase_id"],),
+        ).fetchone()["total"] or 0)
+        remaining_amount = max(0.0, round(float(item["invoice_total"] or 0) -
+                                         float(item["paid_amount"] or 0) -
+                                         cumulative_returns, 2))
+        conn.execute(
+            "UPDATE purchase_invoices SET remaining_amount=?, updated_at=datetime('now','localtime') WHERE id=? AND company_id=?",
+            (remaining_amount, item["purchase_id"], company_id),
+        )
+
+        # قيد المرتجع: مدين المورد، ودائن المخزون وضريبة المدخلات.
+        conn.execute("""
+            INSERT INTO journal_lines (entry_id, account_id, partner_id, debit, credit)
+            VALUES (?, ?, ?, ?, 0)
+        """, (entry_id, supplier_account["id"], item["supplier_id"], total_amount))
+        if net_amount > 0:
+            conn.execute("""
+                INSERT INTO journal_lines (entry_id, account_id, partner_id, debit, credit)
+                VALUES (?, ?, NULL, 0, ?)
+            """, (entry_id, inventory_account["id"], net_amount))
+        if tax_amount > 0:
+            conn.execute("""
+                INSERT INTO journal_lines (entry_id, account_id, partner_id, debit, credit)
+                VALUES (?, ?, NULL, 0, ?)
+            """, (entry_id, vat_account["id"], tax_amount))
+
+        response_data = {
+            "ok": True,
+            "message": f"تم تسجيل مرتجع الشراء {return_no} بنجاح",
+            "return_id": return_id,
+            "return_no": return_no,
+            "purchase_id": int(item["purchase_id"]),
+            "journal_entry_id": entry_id,
+            "movement_no": movement_no,
+            "quantity": quantity,
+            "net_amount": net_amount,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "remaining_amount": remaining_amount,
+        }
+        conn.execute(
+            "UPDATE purchase_returns SET response_json=? WHERE id=?",
+            (json.dumps(response_data, ensure_ascii=False), return_id),
+        )
+        conn.commit()
+        try:
+            db.audit(g.user["full_name"], "مرتجع شراء", f"{return_no} - {item['supplier_name']} - كمية {quantity:g}")
+        except Exception:
+            pass
+        return jsonify(response_data), 200
+    except Exception as exc:
+        conn.rollback()
+        return jsonify(ok=False, error=f"فشل تسجيل مرتجع الشراء: {exc}"), 500
+    finally:
+        conn.close()
+
+
 @app.route("/api/pos-inventory/quick-add", methods=["POST"])
 @require_write
 def api_pos_inventory_quick_add():
