@@ -915,6 +915,53 @@ def init_db():
     conn = connect()
     conn.executescript(SCHEMA)
 
+    # Purchase return tables: safe migration for both new and existing databases.
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS purchase_returns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
+            purchase_id INTEGER NOT NULL REFERENCES purchase_invoices(id) ON DELETE RESTRICT,
+            supplier_id INTEGER NOT NULL REFERENCES business_partners(id) ON DELETE RESTRICT,
+            warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
+            return_no TEXT NOT NULL,
+            return_date TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            net_amount REAL NOT NULL DEFAULT 0,
+            tax_amount REAL NOT NULL DEFAULT 0,
+            total_amount REAL NOT NULL DEFAULT 0,
+            currency_id INTEGER NOT NULL REFERENCES currencies(id) ON DELETE RESTRICT,
+            exchange_rate REAL NOT NULL DEFAULT 1,
+            journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE RESTRICT,
+            request_id TEXT NOT NULL,
+            request_payload_json TEXT NOT NULL,
+            response_json TEXT NOT NULL DEFAULT '{}',
+            created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(company_id, return_no),
+            UNIQUE(company_id, created_by, request_id)
+        );
+        CREATE TABLE IF NOT EXISTS purchase_return_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            return_id INTEGER NOT NULL REFERENCES purchase_returns(id) ON DELETE CASCADE,
+            purchase_item_id INTEGER NOT NULL REFERENCES purchase_invoice_items(id) ON DELETE RESTRICT,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
+            quantity REAL NOT NULL CHECK(quantity > 0),
+            unit_price REAL NOT NULL DEFAULT 0,
+            discount_amount REAL NOT NULL DEFAULT 0,
+            net_amount REAL NOT NULL DEFAULT 0,
+            tax_rate REAL NOT NULL DEFAULT 0,
+            tax_amount REAL NOT NULL DEFAULT 0,
+            total_amount REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(return_id, purchase_item_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_purchase_returns_purchase ON purchase_returns(purchase_id);
+        CREATE INDEX IF NOT EXISTS idx_purchase_returns_supplier ON purchase_returns(supplier_id);
+        CREATE INDEX IF NOT EXISTS idx_purchase_return_items_purchase_item ON purchase_return_items(purchase_item_id);
+    """)
+
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS company_preferences (
             company_id INTEGER PRIMARY KEY
