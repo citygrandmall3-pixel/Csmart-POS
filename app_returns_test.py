@@ -12175,9 +12175,9 @@ def api_pos_purchase_return():
             "SELECT id FROM accounts WHERE id=? AND company_id=? AND is_active=1",
             (item["payable_account_id"], company_id),
         ).fetchone()
-        if not inventory_account or not vat_account or not supplier_account:
+        if not inventory_account or not supplier_account:
             conn.rollback()
-            return jsonify(ok=False, error="حساب المخزون أو ضريبة المدخلات أو حساب المورد غير موجود أو غير نشط"), 400
+            return jsonify(ok=False, error="حساب المخزون أو حساب المورد غير موجود أو غير نشط"), 400
         branch_id = item["branch_id"]
         if not branch_id:
             branch = conn.execute(
@@ -12207,6 +12207,9 @@ def api_pos_purchase_return():
         net_amount = max(0.0, net_amount)
         tax_amount = max(0.0, tax_amount)
         total_amount = round(net_amount + tax_amount, 2)
+        if tax_amount > 0 and not vat_account:
+            conn.rollback()
+            return jsonify(ok=False, error="حساب ضريبة المدخلات 1202 مطلوب لأن قيمة ضريبة المرتجع أكبر من صفر"), 400
 
         movement_no = next_movement_no()
         while conn.execute("SELECT id FROM journal_entries WHERE movement_no=?", (movement_no,)).fetchone():
