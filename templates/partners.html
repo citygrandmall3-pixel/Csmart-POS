@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1>العملاء والموردون</h1>
+        <p>إدارة بيانات العملاء والموردين وربطهم بالحسابات المحاسبية</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="toolbar">
+        <input
+            id="searchInput"
+            type="text"
+            placeholder="بحث بالاسم أو الكود أو الهاتف أو الرقم الضريبي..."
+            oninput="loadPartners()"
+        >
+
+        <select id="typeFilter" onchange="loadPartners()">
+            <option value="">الكل</option>
+            <option value="customer">العملاء</option>
+            <option value="supplier">الموردون</option>
+            <option value="both">عملاء وموردون</option>
+        </select>
+
+        <button class="btn btn-primary" onclick="openForm()">
+            + إضافة عميل / مورد
+        </button>
+    </div>
+</div>
+
+<div class="card" id="partnerFormCard" style="display:none;">
+    <h2 id="formTitle">إضافة عميل / مورد</h2>
+
+    <form id="partnerForm" onsubmit="savePartner(event)">
+        <input type="hidden" id="partnerId">
+
+        <div class="form-grid">
+
+            <div>
+                <label>الكود *</label>
+                <input id="code" required>
+            </div>
+
+            <div>
+                <label>الاسم *</label>
+                <input id="name" required>
+            </div>
+
+            <div>
+                <label>النوع *</label>
+                <select id="partnerType" required>
+                    <option value="customer">عميل</option>
+                    <option value="supplier">مورد</option>
+                    <option value="both">عميل ومورد</option>
+                </select>
+            </div>
+
+            <div>
+                <label>الهاتف</label>
+                <input id="phone">
+            </div>
+
+            <div>
+                <label>البريد الإلكتروني</label>
+                <input id="email" type="email">
+            </div>
+
+            <div>
+                <label>الرقم الضريبي</label>
+                <input id="taxNo">
+            </div>
+
+            <div>
+                <label>حد الائتمان</label>
+                <input id="creditLimit" type="number" step="0.01" value="0">
+            </div>
+
+            <div>
+                <label>الحالة</label>
+                <select id="isActive">
+                    <option value="1">نشط</option>
+                    <option value="0">غير نشط</option>
+                </select>
+            </div>
+
+            <div class="full">
+                <label>العنوان</label>
+                <textarea id="address" rows="2"></textarea>
+            </div>
+
+            <div class="full">
+                <label>ملاحظات</label>
+                <textarea id="notes" rows="2"></textarea>
+            </div>
+
+        </div>
+
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit">حفظ</button>
+            <button class="btn" type="button" onclick="closeForm()">إلغاء</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>الكود</th>
+                    <th>الاسم</th>
+                    <th>النوع</th>
+                    <th>الهاتف</th>
+                    <th>الرقم الضريبي</th>
+                    <th>حساب العميل</th>
+                    <th>حساب المورد</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+
+            <tbody id="partnersTable">
+                <tr>
+                    <td colspan="10">جاري التحميل...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+
+let partners = [];
+
+function esc(value) {
+    if (value === null || value === undefined) return "";
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+async function loadPartners() {
+
+    const q = document.getElementById("searchInput").value.trim();
+    const type = document.getElementById("typeFilter").value;
+
+    let url = "/api/partners";
+
+    const params = new URLSearchParams();
+
+    if (q) params.set("q", q);
+    if (type) params.set("type", type);
+
+    if (params.toString()) {
+        url += "?" + params.toString();
+    }
+
+    try {
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "تعذر تحميل البيانات");
+        }
+
+        partners = data.partners || [];
+
+        renderPartners();
+
+    } catch (error) {
+
+        document.getElementById("partnersTable").innerHTML =
+            `<tr><td colspan="10">خطأ: ${esc(error.message)}</td></tr>`;
+
+    }
+}
+
+function renderPartners() {
+
+    const tbody = document.getElementById("partnersTable");
+
+    if (!partners.length) {
+
+        tbody.innerHTML =
+            `<tr><td colspan="10">لا توجد بيانات.</td></tr>`;
+
+        return;
+    }
+
+    tbody.innerHTML = partners.map((p, index) => {
+
+        let typeText = "عميل ومورد";
+
+        if (p.partner_type === "customer") {
+            typeText = "عميل";
+        } else if (p.partner_type === "supplier") {
+            typeText = "مورد";
+        }
+
+        const activeText =
+            Number(p.is_active) === 1 ? "نشط" : "غير نشط";
+
+        return `
+            <tr>
+
+                <td>${index + 1}</td>
+
+                <td>${esc(p.code)}</td>
+
+                <td><strong>${esc(p.name)}</strong></td>
+
+                <td>${typeText}</td>
+
+                <td>${esc(p.phone || "-")}</td>
+
+                <td>${esc(p.tax_no || "-")}</td>
+
+                <td>
+                    ${esc(
+                        p.receivable_account_no
+                            ? p.receivable_account_no + " - " +
+                              (p.receivable_account_name || "")
+                            : "-"
+                    )}
+                </td>
+
+                <td>
+                    ${esc(
+                        p.payable_account_no
+                            ? p.payable_account_no + " - " +
+                              (p.payable_account_name || "")
+                            : "-"
+                    )}
+                </td>
+
+                <td>${activeText}</td>
+
+                <td>
+                    <button
+                        class="btn"
+                        onclick="editPartner(${p.id})">
+                        تعديل
+                    </button>
+
+                    <button
+                        class="btn btn-danger"
+                        onclick="deletePartner(${p.id})">
+                        حذف
+                    </button>
+                </td>
+
+            </tr>
+        `;
+
+    }).join("");
+}
+
+function openForm(partner = null) {
+
+    document.getElementById("partnerFormCard").style.display = "block";
+
+    if (!partner) {
+
+        document.getElementById("formTitle").textContent =
+            "إضافة عميل / مورد";
+
+        document.getElementById("partnerForm").reset();
+
+        document.getElementById("partnerId").value = "";
+
+        document.getElementById("creditLimit").value = "0";
+
+        document.getElementById("isActive").value = "1";
+
+        return;
+    }
+
+    document.getElementById("formTitle").textContent =
+        "تعديل العميل / المورد";
+
+    document.getElementById("partnerId").value = partner.id;
+    document.getElementById("code").value = partner.code || "";
+    document.getElementById("name").value = partner.name || "";
+    document.getElementById("partnerType").value =
+        partner.partner_type || "customer";
+    document.getElementById("phone").value = partner.phone || "";
+    document.getElementById("email").value = partner.email || "";
+    document.getElementById("taxNo").value = partner.tax_no || "";
+    document.getElementById("creditLimit").value =
+        partner.credit_limit || 0;
+    document.getElementById("isActive").value =
+        Number(partner.is_active) === 1 ? "1" : "0";
+    document.getElementById("address").value =
+        partner.address || "";
+    document.getElementById("notes").value =
+        partner.notes || "";
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
+
+function closeForm() {
+
+    document.getElementById("partnerFormCard").style.display =
+        "none";
+
+    document.getElementById("partnerForm").reset();
+
+    document.getElementById("partnerId").value = "";
+}
+
+function editPartner(id) {
+
+    const partner = partners.find(
+        p => Number(p.id) === Number(id)
+    );
+
+    if (!partner) {
+        alert("البيانات غير موجودة.");
+        return;
+    }
+
+    openForm(partner);
+}
+
+async function savePartner(event) {
+
+    event.preventDefault();
+
+    const id =
+        document.getElementById("partnerId").value.trim();
+
+    const data = {
+
+        code: document.getElementById("code").value.trim(),
+
+        name: document.getElementById("name").value.trim(),
+
+        partner_type:
+            document.getElementById("partnerType").value,
+
+        phone:
+            document.getElementById("phone").value.trim(),
+
+        email:
+            document.getElementById("email").value.trim(),
+
+        tax_no:
+            document.getElementById("taxNo").value.trim(),
+
+        credit_limit:
+            Number(document.getElementById("creditLimit").value || 0),
+
+        is_active:
+            document.getElementById("isActive").value === "1",
+
+        address:
+            document.getElementById("address").value.trim(),
+
+        notes:
+            document.getElementById("notes").value.trim()
+
+    };
+
+    const url = id
+        ? `/api/partners/${id}`
+        : "/api/partners";
+
+    const method = id ? "PUT" : "POST";
+
+    try {
+
+        const response = await fetch(url, {
+            method,
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || "تعذر حفظ البيانات"
+            );
+        }
+
+        alert(
+            id
+                ? "تم تعديل البيانات بنجاح."
+                : "تمت إضافة العميل / المورد بنجاح."
+        );
+
+        closeForm();
+
+        await loadPartners();
+
+    } catch (error) {
+
+        alert(error.message);
+
+    }
+}
+
+async function deletePartner(id) {
+
+    const partner = partners.find(
+        p => Number(p.id) === Number(id)
+    );
+
+    if (!partner) return;
+
+    const confirmed = confirm(
+        "هل أنت متأكد من حذف:\n\n" +
+        partner.name +
+        "\n\nسيتم منع الحذف تلقائيًا إذا كان مرتبطًا بحركات محاسبية."
+    );
+
+    if (!confirmed) return;
+
+    try {
+
+        const response = await fetch(
+            `/api/partners/${id}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || "تعذر حذف البيانات"
+            );
+        }
+
+        alert("تم الحذف بنجاح.");
+
+        await loadPartners();
+
+    } catch (error) {
+
+        alert(error.message);
+
+    }
+}
+
+loadPartners();
+
+</script>
+
+{% endblock %}
