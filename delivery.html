@@ -1,0 +1,76 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>إدارة الديلفري</title><style>body{font-family:Tahoma, sans-serif; background:#f4f6f9; margin:0; padding:20px;} .container{max-width:600px; margin:0 auto; background:#fff; padding:30px; border-radius:10px; box-shadow:0 4px 15px rgba(0,0,0,0.1);} h2{text-align:center; color:#333; margin-bottom:20px;} .form-group{margin-bottom:15px;} label{display:block; margin-bottom:5px; color:#555; font-weight:bold;} input{width:100%; padding:10px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;} .btn{width:100%; padding:12px; border:none; border-radius:5px; cursor:pointer; font-size:16px; font-weight:bold; margin-top:10px;} .btn-save{background:#28a745; color:#fff;} .btn-back{background:#6c757d; color:#fff; text-decoration:none; display:block; text-align:center;}</style></head><body><div class="container"><h2>إنشاء طلب توصيل</h2><div id="invoiceInfo" style="background:#eef5ff;padding:12px;border-radius:6px;margin-bottom:18px;text-align:center;font-weight:bold;">رقم الفاتورة: جارٍ التحميل...</div>
+<div id="deliveryItems" style="margin:16px 0;overflow-x:auto;">
+<table style="width:100%;border-collapse:collapse;background:#fff;">
+<thead><tr style="background:#eef5ff;">
+<th style="padding:8px;border:1px solid #ddd;">الصنف</th>
+<th style="padding:8px;border:1px solid #ddd;">الكمية</th>
+<th style="padding:8px;border:1px solid #ddd;">السعر</th>
+<th style="padding:8px;border:1px solid #ddd;">الإجمالي</th>
+</tr></thead>
+<tbody id="deliveryItemsBody">
+<tr><td colspan="4" style="padding:10px;text-align:center;">جارٍ تحميل الأصناف...</td></tr>
+</tbody></table>
+</div>
+<div class="form-group"><label>اسم المندوب:</label><select id="driverSelect"><option value="">اختر المندوب</option></select></div><div class="form-group"><label>اسم العميل:</label><div style="display:flex;align-items:center;gap:6px;width:100%"><input type="text" id="customerName" autocomplete="off" placeholder="ابحث باسم العميل أو الهاتف" style="display:block;flex:1 1 auto;width:0;min-width:0;box-sizing:border-box"><button type="button" class="btn btn-primary" onclick="openInlineCustomerModal()" title="إضافة عميل جديد" style="display:inline-flex;flex:0 0 42px;width:42px;min-width:42px;max-width:42px;height:40px;padding:0;align-items:center;justify-content:center">+</button></div><div id="deliveryCustomerResults" style="display:none;max-height:160px;overflow:auto;border:1px solid #ccc;background:#fff;position:relative;z-index:5"></div></div><div id="inlineCustomerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:16px"><div style="background:#fff;color:#222;padding:20px;border-radius:10px;width:100%;max-width:420px"><h3>إضافة عميل جديد</h3><label>اسم العميل *</label><input id="inlineCustomerName" type="text" style="width:100%;margin:5px 0 12px"><label>الهاتف *</label><input id="inlineCustomerPhone" type="text" style="width:100%;margin:5px 0 12px"><label>العنوان *</label><input id="inlineCustomerAddress" type="text" style="width:100%;margin:5px 0 16px"><div style="display:flex;gap:8px"><button type="button" class="btn btn-primary" id="inlineCustomerSaveBtn" onclick="createInlineDeliveryCustomer()">حفظ واختيار العميل</button><button type="button" class="btn" onclick="closeInlineCustomerModal()">إلغاء</button></div></div></div><div class="form-group"><label>رقم الهاتف:</label><input type="text" id="phone"></div><div class="form-group"><label>العنوان بالتفصيل:</label><input type="text" id="address"></div><div class="form-group"><label>رسوم التوصيل:</label><select id="regionSelect"><option value="">اختر منطقة التوصيل</option></select><input type="number" id="fees" value="0" readonly></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn btn-save" style="padding:8px 16px;min-width:105px;width:auto;flex:0 0 auto" onclick="saveDelivery(false)">حفظ وعودة</button><button type="button" class="btn" style="padding:8px 12px;width:auto;flex:1;background:#174b83;color:#fff" onclick="saveDelivery(true)">F10 - الدفع والاعتماد</button></div><a href="/sales" class="btn btn-back">العودة لشاشة البيع</a></div><script>
+const deliverySaleId = new URLSearchParams(window.location.search).get("sale_id");
+const invoiceInfo = document.getElementById("invoiceInfo");
+
+async function loadDeliveryInvoice() {
+    const body = document.getElementById("deliveryItemsBody");
+    if (!deliverySaleId || !/^\d+$/.test(deliverySaleId)) {
+        body.innerHTML = '<tr><td colspan="4" style="padding:10px;text-align:center;">لا توجد فاتورة محددة</td></tr>';
+        return;
+    }
+    try {
+        const response = await fetch("/api/sales/" + encodeURIComponent(deliverySaleId) + "/items");
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "تعذر تحميل الفاتورة");
+        const statusLabels = {
+            draft: "مسودة",
+            approved: "معتمدة",
+            held: "معلّقة",
+            cancelled: "ملغاة",
+            returned: "مرتجعة"
+        };
+        const statusText = statusLabels[data.status] || "غير معروفة";
+        invoiceInfo.textContent = "رقم الفاتورة: " + data.invoice_no + " — الحالة: " + statusText;
+        if (!data.items.length) {
+            body.innerHTML = '<tr><td colspan="4" style="padding:10px;text-align:center;">لا توجد أصناف في الفاتورة</td></tr>';
+            return;
+        }
+        body.innerHTML = "";
+        data.items.forEach(function(item) {
+            const tr = document.createElement("tr");
+            [item.product_name, item.quantity, Number(item.unit_price).toFixed(2), Number(item.line_total).toFixed(2)].forEach(function(value) {
+                const td = document.createElement("td");
+                td.textContent = value;
+                td.style.cssText = "padding:8px;border:1px solid #ddd;text-align:center;";
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+    } catch (error) {
+        body.innerHTML = '<tr><td colspan="4" style="padding:10px;text-align:center;color:#b00;">تعذر تحميل بيانات الفاتورة</td></tr>';
+        console.error("تعذر تحميل فاتورة الدليفري", error);
+    }
+}
+loadDeliveryInvoice();
+
+if (deliverySaleId && /^\d+$/.test(deliverySaleId)) {
+    invoiceInfo.textContent = "رقم الفاتورة: " + deliverySaleId;
+} else {
+    invoiceInfo.textContent = "لم يتم تحديد فاتورة";
+    invoiceInfo.style.background = "#fff0f0";
+}
+const driverSelect=document.getElementById("driverSelect"),regionSelect=document.getElementById("regionSelect");
+async function loadDeliveryLists(){try{const r=await Promise.all([fetch("/api/delivery/drivers"),fetch("/api/delivery/services")]);const d=await r[0].json(),g=await r[1].json();if(!d.ok||!g.ok)throw Error("تعذر تحميل القوائم");d.drivers.forEach(x=>{const o=document.createElement("option");o.value=x.id;o.textContent=x.name; o.dataset.name=x.name;driverSelect.appendChild(o)});g.services.forEach(x=>{const o=document.createElement("option");o.value=x.id;o.textContent=x.name+" - "+x.price;o.dataset.name=x.name;o.dataset.price=x.price;regionSelect.appendChild(o)})}catch(e){alert(e.message)}}
+const deliveryKey="delivery_data_"+deliverySaleId,feesInput=document.getElementById("fees"),customerInput=document.getElementById("customerName"),customerResults=document.getElementById("deliveryCustomerResults");let selectedDeliveryCustomer=null,deliverySearchTimer=null;
+regionSelect.addEventListener("change",()=>feesInput.value=regionSelect.selectedOptions[0]?.dataset.price||0);
+function showDeliveryCustomers(list){customerResults.innerHTML="";if(!list.length){customerResults.textContent="لا يوجد عملاء مطابقون";}else{list.forEach(p=>{const b=document.createElement("button");b.type="button";b.style.cssText="display:block;width:100%;padding:9px;text-align:right;border:0;border-bottom:1px solid #ddd;background:#fff";b.textContent=p.name+(p.phone?" - "+p.phone:"");b.addEventListener("click",()=>{selectedDeliveryCustomer=p;customerInput.value=p.name||"";document.getElementById("phone").value=p.phone||"";customerResults.style.display="none";});customerResults.appendChild(b);});}customerResults.style.display="block";}
+customerInput.addEventListener("input",()=>{selectedDeliveryCustomer=null;clearTimeout(deliverySearchTimer);const q=customerInput.value.trim();if(!q){customerResults.style.display="none";customerResults.innerHTML="";return;}deliverySearchTimer=setTimeout(async()=>{try{const r=await fetch("/api/partners?q="+encodeURIComponent(q)),data=await r.json(),partners=(data.partners||[]).filter(p=>(p.partner_type==="customer"||p.partner_type==="both")&&Number(p.is_active)===1);showDeliveryCustomers(partners);}catch(e){customerResults.textContent="تعذر البحث عن العملاء";customerResults.style.display="block";}},250);});
+function restoreDeliveryData(d){if(!d)return;const dr=Array.from(driverSelect.options).find(x=>x.value===String(d.driver_id)||x.dataset.name===d.rep),rg=Array.from(regionSelect.options).find(x=>x.value===String(d.region_id)||x.dataset.name===d.region_name);if(dr)driverSelect.value=dr.value;if(rg)regionSelect.value=rg.value;customerInput.value=d.customer_name||"";document.getElementById("phone").value=d.phone||"";document.getElementById("address").value=d.addr||"";feesInput.value=rg?rg.dataset.price:(d.fees||0);return d;}
+async function restoreDeliveryCustomer(d){if(!d?.customer_id)return;try{const q=d.customer_name||d.phone||"",r=await fetch("/api/partners?q="+encodeURIComponent(q)),data=await r.json();selectedDeliveryCustomer=(data.partners||[]).find(p=>Number(p.id)===Number(d.customer_id)&&(p.partner_type==="customer"||p.partner_type==="both")&&Number(p.is_active)===1)||null;}catch(e){console.warn("تعذر استعادة العميل",e);}}
+function openInlineCustomerModal(){document.getElementById("inlineCustomerModal").style.display="flex";document.getElementById("inlineCustomerName").value=customerInput.value.trim();document.getElementById("inlineCustomerPhone").value=document.getElementById("phone").value.trim();document.getElementById("inlineCustomerAddress").value=document.getElementById("address").value.trim();document.getElementById("inlineCustomerName").focus();}function closeInlineCustomerModal(){document.getElementById("inlineCustomerModal").style.display="none";}async function createInlineDeliveryCustomer(){const name=document.getElementById("inlineCustomerName").value.trim(),phone=document.getElementById("inlineCustomerPhone").value.trim(),address=document.getElementById("inlineCustomerAddress").value.trim(),btn=document.getElementById("inlineCustomerSaveBtn");if(!name||!phone||!address){alert("أدخل اسم العميل والهاتف والعنوان");return;}btn.disabled=true;try{const response=await fetch("/api/partners",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:"C"+Date.now(),name,partner_type:"customer",phone,address,is_active:true})}),result=await response.json();if(!response.ok)throw new Error(result.error||"تعذر إضافة العميل");selectedDeliveryCustomer={id:result.id,name,phone,partner_type:"customer",is_active:1};customerInput.value=name;document.getElementById("phone").value=phone;document.getElementById("address").value=address;customerResults.style.display="none";closeInlineCustomerModal();alert("تمت إضافة العميل واختياره بنجاح");}catch(e){alert(e.message||"حدث خطأ أثناء إضافة العميل");}finally{btn.disabled=false;}}function saveDelivery(openPayment=false){const dr=driverSelect.selectedOptions[0],rg=regionSelect.selectedOptions[0],customer_name=customerInput.value.trim(),phone=document.getElementById("phone").value.trim(),addr=document.getElementById("address").value.trim();if(!dr||!dr.value||!rg||!rg.value||!customer_name||!phone||!addr||!selectedDeliveryCustomer?.id){alert("اختر العميل من قائمة العملاء، وحدد المندوب والمنطقة وأدخل الهاتف والعنوان");customerInput.focus();return;}const data={rep:dr.dataset.name,driver_id:Number(dr.value),region_id:Number(rg.value),region_name:rg.dataset.name,customer_id:Number(selectedDeliveryCustomer.id),customer_name,phone,addr,fees:Number(rg.dataset.price)||0};localStorage.setItem(deliveryKey,JSON.stringify(data));sessionStorage.setItem(deliveryKey,JSON.stringify(data));sessionStorage.setItem("kstore_current_sale_id",String(deliverySaleId));window.location.href=openPayment?("/sales?delivery_pay=1&sale_id="+encodeURIComponent(deliverySaleId)):"/sales";}
+document.addEventListener("keydown",e=>{if(e.key==="F10"&&!e.repeat){e.preventDefault();saveDelivery(true);}});
+loadDeliveryLists().then(async()=>{try{const d=restoreDeliveryData(JSON.parse(sessionStorage.getItem(deliveryKey)||localStorage.getItem(deliveryKey)||"null"));await restoreDeliveryCustomer(d);}catch(e){console.warn(e);}});
+</script></body></html>

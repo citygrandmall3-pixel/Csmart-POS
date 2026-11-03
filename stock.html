@@ -1,0 +1,888 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1>📦 المخزون والحركات</h1>
+        <p>إدارة أرصدة المخازن وحركات الإدخال والإخراج</p>
+    </div>
+</div>
+
+<!-- =========================
+     تسجيل حركة مخزون
+========================= -->
+
+<div class="card">
+    <h2>➕ تسجيل حركة مخزون</h2>
+
+    <div class="form-grid">
+
+        <div class="form-group">
+            <label>المخزن</label>
+            <select id="movementWarehouse">
+                <option value="">اختر المخزن</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>المنتج</label>
+            <select id="movementProduct">
+                <option value="">اختر المنتج</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>نوع الحركة</label>
+            <select id="movementType">
+                <option value="in">📥 إدخال</option>
+                <option value="out">📤 إخراج</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>الكمية</label>
+            <input
+                type="number"
+                id="movementQuantity"
+                min="0"
+                step="1"
+                placeholder="الكمية"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>نوع المرجع</label>
+            <input
+                type="text"
+                id="referenceType"
+                placeholder="مثال: فاتورة شراء"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>رقم المرجع</label>
+            <input
+                type="number"
+                id="referenceId"
+                placeholder="اختياري"
+            >
+        </div>
+
+        <div class="form-group form-group-wide">
+            <label>ملاحظات</label>
+            <input
+                type="text"
+                id="movementNotes"
+                placeholder="ملاحظات الحركة"
+            >
+        </div>
+
+    </div>
+
+    <div style="margin-top:15px;">
+        <button class="btn btn-primary" onclick="saveMovement()">
+            💾 تسجيل الحركة
+        </button>
+
+        <button class="btn" onclick="clearMovementForm()">
+            ↩️ تفريغ
+        </button>
+    </div>
+
+    <div id="movementMessage" style="margin-top:15px;"></div>
+</div>
+
+
+<!-- =========================
+     أرصدة المخزون
+========================= -->
+
+<div class="card">
+
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2>📊 أرصدة المخزون</h2>
+
+        <button class="btn" onclick="loadBalances()">
+            🔄 تحديث
+        </button>
+    </div>
+
+    <div class="form-grid" style="margin-top:15px;">
+
+        <div class="form-group">
+            <label>بحث</label>
+            <input
+                type="text"
+                id="balanceSearch"
+                placeholder="اسم المنتج أو الكود أو المخزن"
+                oninput="loadBalances()"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>المخزن</label>
+            <select id="balanceWarehouse" onchange="loadBalances()">
+                <option value="">كل المخازن</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>المنتج</label>
+            <select id="balanceProduct" onchange="loadBalances()">
+                <option value="">كل المنتجات</option>
+            </select>
+        </div>
+
+    </div>
+
+    <div id="balancesTable" style="margin-top:20px;">
+        جاري تحميل الأرصدة...
+    </div>
+
+</div>
+
+
+<!-- =========================
+     سجل الحركات
+========================= -->
+
+<div class="card">
+
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2>📋 سجل حركات المخزون</h2>
+
+        <button class="btn" onclick="loadMovements()">
+            🔄 تحديث
+        </button>
+    </div>
+
+    <div class="form-grid" style="margin-top:15px;">
+
+        <div class="form-group">
+            <label>بحث</label>
+            <input
+                type="text"
+                id="movementSearch"
+                placeholder="اسم المنتج أو الكود أو المخزن"
+                oninput="loadMovements()"
+            >
+        </div>
+
+        <div class="form-group">
+            <label>المخزن</label>
+            <select id="historyWarehouse" onchange="loadMovements()">
+                <option value="">كل المخازن</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>المنتج</label>
+            <select id="historyProduct" onchange="loadMovements()">
+                <option value="">كل المنتجات</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>نوع الحركة</label>
+            <select id="historyType" onchange="loadMovements()">
+                <option value="">كل الحركات</option>
+                <option value="in">📥 إدخال</option>
+                <option value="out">📤 إخراج</option>
+            </select>
+        </div>
+
+    </div>
+
+    <div id="movementsTable" style="margin-top:20px;">
+        جاري تحميل الحركات...
+    </div>
+
+</div>
+
+
+<script>
+
+let warehouses = [];
+let products = [];
+
+
+/* =========================
+   تحميل المخازن
+========================= */
+
+async function loadWarehouses() {
+
+    try {
+
+        const response = await fetch("/api/warehouses?status=active");
+        const data = await response.json();
+
+        if (!response.ok || !Array.isArray(data.rows)) {
+            throw new Error(data.error || "تعذر تحميل المخازن");
+        }
+
+        warehouses = data.rows || [];
+
+        fillWarehouseSelect("movementWarehouse", "اختر المخزن");
+        fillWarehouseSelect("balanceWarehouse", "كل المخازن");
+        fillWarehouseSelect("historyWarehouse", "كل المخازن");
+
+    } catch (error) {
+
+        console.error(error);
+
+        showMessage(
+            "movementMessage",
+            "❌ " + error.message,
+            "error"
+        );
+    }
+}
+
+
+/* =========================
+   تعبئة المخازن
+========================= */
+
+function fillWarehouseSelect(id, firstText) {
+
+    const select = document.getElementById(id);
+
+    if (!select) return;
+
+    const currentValue = select.value;
+
+    select.innerHTML =
+        `<option value="">${firstText}</option>`;
+
+    warehouses.forEach(warehouse => {
+
+        const option = document.createElement("option");
+
+        option.value = warehouse.id;
+
+        option.textContent =
+            `${warehouse.code} - ${warehouse.name}`;
+
+        select.appendChild(option);
+    });
+
+    if (
+        currentValue &&
+        [...select.options].some(o => o.value == currentValue)
+    ) {
+        select.value = currentValue;
+    }
+}
+
+
+/* =========================
+   تحميل المنتجات
+========================= */
+
+async function loadProducts() {
+
+    try {
+
+        const response = await fetch("/api/products?status=active");
+        const data = await response.json();
+
+        if (!response.ok || !Array.isArray(data.items)) {
+            throw new Error(data.error || "تعذر تحميل المنتجات");
+        }
+
+        products = data.items || [];
+
+        fillProductSelect("movementProduct", "اختر المنتج");
+        fillProductSelect("balanceProduct", "كل المنتجات");
+        fillProductSelect("historyProduct", "كل المنتجات");
+
+    } catch (error) {
+
+        console.error(error);
+
+        showMessage(
+            "movementMessage",
+            "❌ " + error.message,
+            "error"
+        );
+    }
+}
+
+
+/* =========================
+   تعبئة المنتجات
+========================= */
+
+function fillProductSelect(id, firstText) {
+
+    const select = document.getElementById(id);
+
+    if (!select) return;
+
+    const currentValue = select.value;
+
+    select.innerHTML =
+        `<option value="">${firstText}</option>`;
+
+    products.forEach(product => {
+
+        const option = document.createElement("option");
+
+        option.value = product.id;
+
+        option.textContent =
+            `${product.code} - ${product.name}`;
+
+        select.appendChild(option);
+    });
+
+    if (
+        currentValue &&
+        [...select.options].some(o => o.value == currentValue)
+    ) {
+        select.value = currentValue;
+    }
+}
+
+
+/* =========================
+   تسجيل حركة
+========================= */
+
+async function saveMovement() {
+
+    const warehouseId =
+        document.getElementById("movementWarehouse").value;
+
+    const productId =
+        document.getElementById("movementProduct").value;
+
+    const movementType =
+        document.getElementById("movementType").value;
+
+    const quantity =
+        document.getElementById("movementQuantity").value;
+
+    const referenceType =
+        document.getElementById("referenceType").value.trim();
+
+    const referenceId =
+        document.getElementById("referenceId").value;
+
+    const notes =
+        document.getElementById("movementNotes").value.trim();
+
+
+    if (!warehouseId) {
+        showMessage(
+            "movementMessage",
+            "❌ اختر المخزن أولًا",
+            "error"
+        );
+        return;
+    }
+
+
+    if (!productId) {
+        showMessage(
+            "movementMessage",
+            "❌ اختر المنتج أولًا",
+            "error"
+        );
+        return;
+    }
+
+
+    if (!quantity || Number(quantity) <= 0) {
+        showMessage(
+            "movementMessage",
+            "❌ أدخل كمية صحيحة",
+            "error"
+        );
+        return;
+    }
+
+
+    try {
+
+        const body = {
+            warehouse_id: Number(warehouseId),
+            product_id: Number(productId),
+            movement_type: movementType,
+            quantity: Number(quantity),
+            reference_type: referenceType,
+            notes: notes
+        };
+
+
+        if (referenceId) {
+            body.reference_id = Number(referenceId);
+        }
+
+
+        const response = await fetch(
+            "/api/stock-movements",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(body)
+            }
+        );
+
+
+        const data = await response.json();
+
+
+        if (!response.ok || !data.ok) {
+
+            let message =
+                data.error || "فشل تسجيل الحركة";
+
+            if (data.current_quantity !== undefined) {
+                message +=
+                    ` — الرصيد الحالي: ${data.current_quantity}`;
+            }
+
+            throw new Error(message);
+        }
+
+
+        showMessage(
+            "movementMessage",
+            `✅ تم تسجيل الحركة بنجاح — الرصيد الجديد: ${data.new_quantity}`,
+            "success"
+        );
+
+
+        clearMovementForm(false);
+
+        await loadBalances();
+        await loadMovements();
+
+    } catch (error) {
+
+        console.error(error);
+
+        showMessage(
+            "movementMessage",
+            "❌ " + error.message,
+            "error"
+        );
+    }
+}
+
+
+/* =========================
+   تفريغ نموذج الحركة
+========================= */
+
+function clearMovementForm(clearMessage = true) {
+
+    document.getElementById("movementWarehouse").value = "";
+    document.getElementById("movementProduct").value = "";
+    document.getElementById("movementType").value = "in";
+    document.getElementById("movementQuantity").value = "";
+    document.getElementById("referenceType").value = "";
+    document.getElementById("referenceId").value = "";
+    document.getElementById("movementNotes").value = "";
+
+    if (clearMessage) {
+        document.getElementById("movementMessage").innerHTML = "";
+    }
+}
+
+
+/* =========================
+   تحميل الأرصدة
+========================= */
+
+async function loadBalances() {
+
+    const search =
+        document.getElementById("balanceSearch").value.trim();
+
+    const warehouseId =
+        document.getElementById("balanceWarehouse").value;
+
+    const productId =
+        document.getElementById("balanceProduct").value;
+
+
+    const params = new URLSearchParams();
+
+    if (search) {
+        params.set("search", search);
+    }
+
+    if (warehouseId) {
+        params.set("warehouse_id", warehouseId);
+    }
+
+    if (productId) {
+        params.set("product_id", productId);
+    }
+
+
+    try {
+
+        const response = await fetch(
+            "/api/stock-balances?" + params.toString()
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !Array.isArray(data.rows)) {
+            throw new Error(
+                data.error || "تعذر تحميل الأرصدة"
+            );
+        }
+
+        renderBalances(data.rows || []);
+
+    } catch (error) {
+
+        document.getElementById("balancesTable").innerHTML =
+            `<div style="color:#b00020;">
+                ❌ ${escapeHtml(error.message)}
+             </div>`;
+    }
+}
+
+
+/* =========================
+   عرض الأرصدة
+========================= */
+
+function renderBalances(rows) {
+
+    if (!rows.length) {
+
+        document.getElementById("balancesTable").innerHTML =
+            `<div style="padding:20px; text-align:center;">
+                لا توجد أرصدة مخزون.
+             </div>`;
+
+        return;
+    }
+
+
+    let html = `
+        <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th>المخزن</th>
+                    <th>كود المنتج</th>
+                    <th>المنتج</th>
+                    <th>الكمية</th>
+                    <th>الوحدة</th>
+                    <th>آخر تحديث</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+
+    rows.forEach(row => {
+
+        html += `
+            <tr>
+                <td>
+                    ${escapeHtml(row.warehouse_name)}
+                </td>
+
+                <td>
+                    ${escapeHtml(row.product_code)}
+                </td>
+
+                <td>
+                    ${escapeHtml(row.product_name)}
+                </td>
+
+                <td>
+                    <strong>
+                        ${formatNumber(row.quantity)}
+                    </strong>
+                </td>
+
+                <td>
+                    ${escapeHtml(row.unit_symbol || row.unit_name || "")}
+                </td>
+
+                <td>
+                    ${escapeHtml(row.updated_at || "")}
+                </td>
+            </tr>
+        `;
+    });
+
+
+    html += `
+            </tbody>
+        </table>
+        </div>
+    `;
+
+
+    document.getElementById("balancesTable").innerHTML = html;
+}
+
+
+/* =========================
+   تحميل الحركات
+========================= */
+
+async function loadMovements() {
+
+    const search =
+        document.getElementById("movementSearch").value.trim();
+
+    const warehouseId =
+        document.getElementById("historyWarehouse").value;
+
+    const productId =
+        document.getElementById("historyProduct").value;
+
+    const movementType =
+        document.getElementById("historyType").value;
+
+
+    const params = new URLSearchParams();
+
+    if (search) {
+        params.set("search", search);
+    }
+
+    if (warehouseId) {
+        params.set("warehouse_id", warehouseId);
+    }
+
+    if (productId) {
+        params.set("product_id", productId);
+    }
+
+    if (movementType) {
+        params.set("movement_type", movementType);
+    }
+
+
+    try {
+
+        const response = await fetch(
+            "/api/stock-movements?" + params.toString()
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !Array.isArray(data.rows)) {
+            throw new Error(
+                data.error || "تعذر تحميل الحركات"
+            );
+        }
+
+        renderMovements(data.rows || []);
+
+    } catch (error) {
+
+        document.getElementById("movementsTable").innerHTML =
+            `<div style="color:#b00020;">
+                ❌ ${escapeHtml(error.message)}
+             </div>`;
+    }
+}
+
+
+/* =========================
+   عرض الحركات
+========================= */
+
+function renderMovements(rows) {
+
+    if (!rows.length) {
+
+        document.getElementById("movementsTable").innerHTML =
+            `<div style="padding:20px; text-align:center;">
+                لا توجد حركات مخزون.
+             </div>`;
+
+        return;
+    }
+
+
+    let html = `
+        <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th>التاريخ</th>
+                    <th>نوع الحركة</th>
+                    <th>المخزن</th>
+                    <th>المنتج</th>
+                    <th>الكمية</th>
+                    <th>الوحدة</th>
+                    <th>المرجع</th>
+                    <th>المستخدم</th>
+                    <th>ملاحظات</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+
+    rows.forEach(row => {
+
+        const typeText =
+            row.movement_type === "in"
+                ? "📥 إدخال"
+                : "📤 إخراج";
+
+
+        const reference =
+            row.reference_type
+                ? escapeHtml(row.reference_type) +
+                  (
+                    row.reference_id
+                        ? ` #${row.reference_id}`
+                        : ""
+                  )
+                : "—";
+
+
+        html += `
+            <tr>
+                <td>
+                    ${escapeHtml(row.movement_date || "")}
+                </td>
+
+                <td>
+                    <strong>${typeText}</strong>
+                </td>
+
+                <td>
+                    ${escapeHtml(row.warehouse_name)}
+                </td>
+
+                <td>
+                    ${escapeHtml(row.product_name)}
+                </td>
+
+                <td>
+                    ${formatNumber(row.quantity)}
+                </td>
+
+                <td>
+                    ${escapeHtml(row.unit_symbol || row.unit_name || "")}
+                </td>
+
+                <td>
+                    ${reference}
+                </td>
+
+                <td>
+                    ${escapeHtml(row.created_by_name || row.created_by_username || "")}
+                </td>
+
+                <td>
+                    ${escapeHtml(row.notes || "")}
+                </td>
+            </tr>
+        `;
+    });
+
+
+    html += `
+            </tbody>
+        </table>
+        </div>
+    `;
+
+
+    document.getElementById("movementsTable").innerHTML = html;
+}
+
+
+/* =========================
+   رسائل
+========================= */
+
+function showMessage(id, message, type) {
+
+    const element =
+        document.getElementById(id);
+
+    if (!element) return;
+
+    let color =
+        type === "success"
+            ? "#198754"
+            : "#b00020";
+
+    element.innerHTML =
+        `<div style="color:${color}; font-weight:bold;">
+            ${escapeHtml(message)}
+         </div>`;
+}
+
+
+/* =========================
+   تنسيق الأرقام
+========================= */
+
+function formatNumber(value) {
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "0";
+    }
+
+    return number.toLocaleString(
+        "ar-EG",
+        {
+            maximumFractionDigits: 6
+        }
+    );
+}
+
+
+/* =========================
+   حماية HTML
+========================= */
+
+function escapeHtml(value) {
+
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+/* =========================
+   بدء الصفحة
+========================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async function() {
+
+        await loadWarehouses();
+
+        await loadProducts();
+
+        await loadBalances();
+
+        await loadMovements();
+
+    }
+);
+
+</script>
+
+{% endblock %}

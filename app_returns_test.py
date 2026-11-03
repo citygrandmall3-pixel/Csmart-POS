@@ -79,8 +79,8 @@ def _security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; "
-        "font-src 'self' https://fonts.gstatic.com; connect-src 'self'"
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+        "font-src 'self'; connect-src 'self'"
     )
     return response
 
@@ -105,108 +105,10 @@ def _sanitize_dict(d):
 # المصادقة والصلاحيات
 # ------------------------------------------------------------------
 
-CASHIER_SAFE_ENDPOINTS = {
-    "sales_page", "api_cashier_login", "api_session_open", "api_session_current",
-    "api_products", "api_product_categories", "api_product_price_lookup",
-    "api_partners", "api_currencies_list", "api_pos_default_warehouse",
-    "api_sales_list", "api_sales_held",
-}
-CASHIER_ACTIVE_ENDPOINTS = {
-    "api_session_close", "api_session_detail", "api_sale_create", "api_sale_item_create",
-    "api_sale_items", "api_sales_update", "api_sales_delete", "api_sales_item_update",
-    "api_sales_item_delete", "api_sales_approve", "api_sales_recalculate",
-    "api_sale_hold", "api_sale_resume", "api_sale_held_delete",
-    "api_returns_search_invoice", "api_returns_execute", "api_sales_delivery_pending",
-    "api_sales_delivery_collect", "print_sale", "api_partners_create",
-    "delivery_page", "delivery_pending_page", "api_delivery_drivers", "api_delivery_services",
-    "api_sessions_list",
-}
-
-
-def _normalize_cashier_permissions(value):
-    result = dict(DEFAULT_CASHIER_PERMS)
-    if isinstance(value, str):
-        try:
-            value = json.loads(value)
-        except (TypeError, ValueError):
-            value = {}
-    if isinstance(value, dict):
-        for key in result:
-            if key in value:
-                result[key] = value[key]
-    for key in ("can_sell", "can_open_session", "can_hold_sale", "can_cancel_draft",
-                "can_view_own_reports", "can_apply_discount", "can_view_stock",
-                "can_view_others_sessions"):
-        result[key] = result[key] is True or result[key] == 1 or str(result[key]).lower() in ("true", "1", "yes")
-    try:
-        result["max_discount_pct"] = max(0.0, min(100.0, float(result.get("max_discount_pct") or 0)))
-    except (TypeError, ValueError):
-        result["max_discount_pct"] = 0.0
-    return result
-
-
-def _cashier_permissions(cashier=None):
-    cashier = cashier or getattr(g, "cashier", None) or {}
-    raw = cashier.get("permissions_json") if hasattr(cashier, "get") else None
-    try:
-        parsed = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-    except (TypeError, ValueError):
-        parsed = {}
-    defaults = dict(DEFAULT_CASHIER_PERMS)
-    for key in defaults:
-        if key in parsed:
-            defaults[key] = parsed[key]
-    for key in ("can_sell", "can_open_session", "can_hold_sale", "can_cancel_draft",
-                "can_view_own_reports", "can_apply_discount", "can_view_stock",
-                "can_view_others_sessions"):
-        defaults[key] = defaults[key] is True or defaults[key] == 1 or str(defaults[key]).lower() in ("true", "1", "yes")
-    try:
-        defaults["max_discount_pct"] = max(0.0, min(100.0, float(defaults.get("max_discount_pct") or 0)))
-    except (TypeError, ValueError):
-        defaults["max_discount_pct"] = 0.0
-    return defaults
-
-
-def _cashier_permission_enabled(permission):
-    return bool(_cashier_permissions().get(permission, False))
-
-
-def _cashier_discount_error(discount, base_amount):
-    if not session.get("cashier_mode") or float(discount or 0) <= 0:
-        return None
-    perms = _cashier_permissions()
-    if not perms.get("can_apply_discount"):
-        return "لا يملك الكاشير صلاحية تطبيق الخصم"
-    limit = float(base_amount or 0) * float(perms.get("max_discount_pct") or 0) / 100.0
-    if float(discount or 0) > limit + 0.009:
-        return "قيمة الخصم تتجاوز الحد المسموح للكاشير"
-    return None
-
-
-def _cashier_sale_in_current_session(sale_id):
-    if not session.get("cashier_mode"):
-        return True
-    active = getattr(g, "cashier_session", None)
-    if not active:
-        return False
-    row = db.query_one(
-        "SELECT id FROM sales_invoices WHERE id=? AND company_id=? AND session_id=?",
-        (sale_id, active["company_id"], active["id"])
-    )
-    return bool(row)
-
-
 @app.before_request
 def before():
-    endpoint = request.endpoint
-    cashier_mode = bool(session.get("cashier_mode"))
-    if endpoint == "static" or endpoint == "logout":
-        return None
-    if endpoint == "login":
-        if cashier_mode and session.get("uid"):
-            return redirect(url_for("sales_page"))
-        if cashier_mode and not session.get("uid"):
-            session.clear()
+    allowed = {"login", "static"}
+    if request.endpoint in allowed:
         return None
     uid = session.get("uid")
     g.user = db.query_one("SELECT * FROM users WHERE id=?", (uid,)) if uid else None
@@ -214,43 +116,6 @@ def before():
         if request.path.startswith("/api/"):
             return jsonify(error="انتهت الجلسة، يرجى تسجيل الدخول"), 401
         return redirect(url_for("login"))
-
-    g.cashier = None
-    g.cashier_session = None
-    if session.get("cashier_mode"):
-        company_id = _current_company_id()
-        if session.get("cashier_user_id") != g.user["id"] or session.get("cashier_company_id") != company_id:
-            session.pop("cashier_id", None)
-            session.pop("cashier_session_id", None)
-            session.pop("cashier_pending_id", None)
-        active_cashier_id = session.get("cashier_id")
-        pending_cashier_id = session.get("cashier_pending_id")
-        cashier_id = active_cashier_id or pending_cashier_id
-        if cashier_id and company_id:
-            g.cashier = db.query_one(
-                "SELECT id, username, full_name, permissions_json, is_active FROM cashiers WHERE id=? AND company_id=?",
-                (cashier_id, company_id)
-            )
-        if active_cashier_id and company_id and g.cashier:
-            g.cashier_session = db.query_one(
-                "SELECT * FROM cashier_sessions WHERE id=? AND company_id=? AND cashier_id=? AND user_id=? AND status='open'",
-                (session.get("cashier_session_id"), company_id, active_cashier_id, g.user["id"])
-            ) if session.get("cashier_session_id") else None
-            if not g.cashier_session:
-                session.pop("cashier_id", None)
-                session.pop("cashier_session_id", None)
-                g.cashier = None
-        allowed = CASHIER_SAFE_ENDPOINTS | CASHIER_ACTIVE_ENDPOINTS
-        if endpoint == "api_stock_balances" and g.cashier and g.cashier.get("is_active") and g.cashier_session and _cashier_permission_enabled("can_view_stock"):
-            allowed.add(endpoint)
-        if endpoint not in allowed:
-            if request.path.startswith("/api/"):
-                return jsonify(ok=False, error="هذه العملية غير متاحة في وضع الكاشير"), 403
-            return redirect(url_for("sales_page"))
-        if endpoint in CASHIER_ACTIVE_ENDPOINTS and not g.cashier_session:
-            return jsonify(ok=False, error="يجب تسجيل الدخول للكاشير وفتح وردية أولاً"), 403
-        if endpoint in {"delivery_page", "delivery_pending_page", "api_delivery_drivers", "api_delivery_services"} and not _cashier_permission_enabled("can_sell"):
-            return jsonify(ok=False, error="لا يملك الكاشير صلاحية هذه الشاشة"), 403
     try:
         db.auto_monthly_backup()
     except Exception:
@@ -259,7 +124,7 @@ def before():
 
 
 def can_write():
-    return not session.get("cashier_mode") and g.user["role"] in ("admin", "accountant")
+    return g.user["role"] in ("admin", "accountant")
 
 
 def require_write(f):
@@ -271,66 +136,10 @@ def require_write(f):
     return wrapper
 
 
-def require_cashier_permission(permission):
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            if session.get("cashier_mode"):
-                if (not getattr(g, "cashier", None) or not g.cashier.get("is_active")
-                        or not getattr(g, "cashier_session", None)
-                        or not _cashier_permission_enabled(permission)):
-                    return jsonify(ok=False, error="الحساب معطّل أو لا يملك الكاشير الصلاحية المطلوبة"), 403
-                sale_id = kwargs.get("sale_id", kwargs.get("sid"))
-                if sale_id is not None and not _cashier_sale_in_current_session(sale_id):
-                    return jsonify(ok=False, error="الفاتورة لا تخص ورديتك الحالية"), 404
-            elif not can_write():
-                return jsonify(error="صلاحيتك للمشاهدة فقط"), 403
-            return f(*args, **kwargs)
-        return wrapper
-    return decorator
-
-
-def require_cashier_sale_read(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        sale_id = kwargs.get("sale_id")
-        if session.get("cashier_mode") and (not getattr(g, "cashier_session", None) or not _cashier_sale_in_current_session(sale_id)):
-            return jsonify(ok=False, error="الفاتورة لا تخص ورديتك الحالية"), 404
-        return f(*args, **kwargs)
-    return wrapper
-
-
-def cashier_session_open_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if session.get("cashier_mode"):
-            if (not getattr(g, "cashier", None) or not g.cashier.get("is_active")
-                    or not _cashier_permission_enabled("can_open_session")):
-                return jsonify(ok=False, error="الحساب معطّل أو لا يملك الكاشير صلاحية فتح الوردية"), 403
-            if getattr(g, "cashier_session", None):
-                return jsonify(ok=False, error="لديك وردية مفتوحة بالفعل"), 400
-        elif not can_write():
-            return jsonify(error="صلاحيتك للمشاهدة فقط"), 403
-        return f(*args, **kwargs)
-    return wrapper
-
-
-def cashier_session_close_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if session.get("cashier_mode"):
-            if not getattr(g, "cashier_session", None) or int(g.cashier_session["id"]) != int(kwargs.get("sid", 0)):
-                return jsonify(ok=False, error="يمكن للكاشير إغلاق ورديته الحالية فقط"), 403
-        elif not can_write():
-            return jsonify(error="صلاحيتك للمشاهدة فقط"), 403
-        return f(*args, **kwargs)
-    return wrapper
-
-
 def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if session.get("cashier_mode") or g.user["role"] != "admin":
+        if g.user["role"] != "admin":
             return jsonify(error="هذه الصفحة لمدير النظام فقط"), 403
         return f(*args, **kwargs)
     return wrapper
@@ -521,34 +330,7 @@ def settings_page():
 
 @app.route("/partners")
 def partners_page():
-    # رابط توافق قديم؛ التوجيه الافتراضي إلى سجل العملاء دون دمج السجلين.
-    return redirect("/customers")
-
-
-@app.route("/customers")
-def customers_page():
-    return render_template(
-        "partners.html",
-        partner_type="customer",
-        page_title="العملاء",
-        page_subtitle="إدارة بيانات العملاء وحسابات المدينين وحدود الائتمان وكشوف الحساب والتسويات.",
-        add_label="إضافة عميل",
-        account_no="1201",
-        account_label="العملاء (المدينون)",
-    )
-
-
-@app.route("/suppliers")
-def suppliers_page():
-    return render_template(
-        "partners.html",
-        partner_type="supplier",
-        page_title="الموردون",
-        page_subtitle="إدارة بيانات الموردين وحسابات الدائنين والأرصدة وكشوف الحساب وتسويات السداد.",
-        add_label="إضافة مورد",
-        account_no="2101",
-        account_label="الموردون (الدائنون)",
-    )
+    return render_template("partners.html")
 
 
 @app.route("/product-categories")
@@ -644,7 +426,7 @@ def api_global_search():
             "title": r["name"],
             "subtitle": f"{kind} • {r['code']}"
                         + (f" • {r['phone']}" if r["phone"] else ""),
-            "url": "/suppliers" if r["partner_type"] == "supplier" else "/customers",
+            "url": "/partners",
             "search": r["name"]
         })
 
@@ -1016,7 +798,7 @@ def help_page():
 
 
 @app.route("/api/partners", methods=["POST"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_partners_create():
     """إنشاء عميل أو مورد أو طرف يجمع الاثنين."""
     d = request.json or {}
@@ -1028,8 +810,8 @@ def api_partners_create():
     if not code or not name:
         return jsonify(error="كود الطرف واسم الطرف مطلوبان"), 400
 
-    if partner_type not in ("customer", "supplier"):
-        return jsonify(error="اختر صفحة العملاء أو صفحة الموردين لإضافة الطرف"), 400
+    if partner_type not in ("customer", "supplier", "both"):
+        return jsonify(error="نوع الطرف يجب أن يكون customer أو supplier أو both"), 400
 
     company = db.query_one(
         "SELECT * FROM companies WHERE is_active=1 ORDER BY id LIMIT 1"
@@ -1091,13 +873,6 @@ def api_partners_create():
             return jsonify(error="حساب الموردين 2101 غير موجود أو غير نشط"), 500
         payable_account_id = acc["id"]
 
-    try:
-        credit_limit = float(d.get("credit_limit") or 0) if partner_type == "customer" else 0.0
-    except (TypeError, ValueError):
-        return jsonify(error="حد الائتمان غير صحيح"), 400
-    if not math.isfinite(credit_limit) or credit_limit < 0:
-        return jsonify(error="حد الائتمان يجب أن يكون صفرًا أو أكبر"), 400
-
     partner_id = db.execute(
         """
         INSERT INTO business_partners (
@@ -1120,7 +895,7 @@ def api_partners_create():
             (d.get("email") or "").strip(),
             (d.get("address") or "").strip(),
             (d.get("tax_no") or "").strip(),
-            credit_limit,
+            float(d.get("credit_limit") or 0),
             1 if d.get("is_active", True) else 0,
             (d.get("notes") or "").strip(),
         ),
@@ -1155,9 +930,7 @@ def api_partners_update(partner_id):
         return jsonify(error="كود الطرف واسم الطرف مطلوبان"), 400
 
     if partner_type not in ("customer", "supplier", "both"):
-        return jsonify(error="نوع الطرف غير صحيح"), 400
-    if partner_type != partner["partner_type"]:
-        return jsonify(error="لا يمكن تغيير تصنيف العميل أو المورد من شاشة البيانات؛ أنشئ السجل في الصفحة الصحيحة"), 400
+        return jsonify(error="نوع الطرف يجب أن يكون customer أو supplier أو both"), 400
 
     company_id = partner["company_id"]
 
@@ -1212,13 +985,6 @@ def api_partners_update(partner_id):
             return jsonify(error="حساب الموردين 2101 غير موجود أو غير نشط"), 500
         payable_account_id = acc["id"]
 
-    try:
-        credit_limit = float(d.get("credit_limit") or 0) if partner_type in ("customer", "both") else 0.0
-    except (TypeError, ValueError):
-        return jsonify(error="حد الائتمان غير صحيح"), 400
-    if not math.isfinite(credit_limit) or credit_limit < 0:
-        return jsonify(error="حد الائتمان يجب أن يكون صفرًا أو أكبر"), 400
-
     db.execute(
         """
         UPDATE business_partners
@@ -1234,7 +1000,7 @@ def api_partners_update(partner_id):
             (d.get("email") or "").strip(),
             (d.get("address") or "").strip(),
             (d.get("tax_no") or "").strip(),
-            credit_limit,
+            float(d.get("credit_limit") or 0),
             1 if d.get("is_active", True) else 0,
             (d.get("notes") or "").strip(),
             partner_id,
@@ -1297,23 +1063,7 @@ def api_partners():
             ra.acc_no AS receivable_account_no,
             ra.name AS receivable_account_name,
             pa.acc_no AS payable_account_no,
-            pa.name AS payable_account_name,
-            CASE WHEN p.receivable_account_id IS NOT NULL THEN (
-                SELECT ROUND(COALESCE(SUM(jl.debit - jl.credit), 0), 2)
-                FROM journal_lines jl
-                JOIN journal_entries je ON je.id=jl.entry_id
-                WHERE jl.partner_id=p.id
-                  AND jl.account_id=p.receivable_account_id
-                  AND je.status='posted'
-            ) ELSE 0 END AS customer_balance,
-            CASE WHEN p.payable_account_id IS NOT NULL THEN (
-                SELECT ROUND(COALESCE(SUM(jl.credit - jl.debit), 0), 2)
-                FROM journal_lines jl
-                JOIN journal_entries je ON je.id=jl.entry_id
-                WHERE jl.partner_id=p.id
-                  AND jl.account_id=p.payable_account_id
-                  AND je.status='posted'
-            ) ELSE 0 END AS supplier_balance
+            pa.name AS payable_account_name
         FROM business_partners p
         LEFT JOIN companies c ON c.id = p.company_id
         LEFT JOIN branches b ON b.id = p.branch_id
@@ -1323,11 +1073,6 @@ def api_partners():
         WHERE 1=1
     """
     args = []
-
-    company_id = _current_company_id()
-    if company_id:
-        sql += " AND p.company_id=?"
-        args.append(company_id)
 
     if q:
         sql += """
@@ -1341,25 +1086,13 @@ def api_partners():
         pattern = f"%{q}%"
         args.extend([pattern, pattern, pattern, pattern])
 
-    if session.get("cashier_mode"):
-        partner_type = "customer"
-    if partner_type == "customer":
-        sql += " AND p.partner_type IN ('customer','both')"
-    elif partner_type == "supplier":
-        sql += " AND p.partner_type IN ('supplier','both')"
-    elif partner_type == "both":
-        sql += " AND p.partner_type IN ('customer','supplier','both')"
+    if partner_type in ("customer", "supplier", "both"):
+        sql += " AND p.partner_type=?"
+        args.append(partner_type)
 
     sql += " ORDER BY p.name COLLATE NOCASE, p.id"
 
-    partner_rows = db.query(sql, args)
-    if session.get("cashier_mode"):
-        partner_rows = [dict(row) for row in partner_rows]
-        for partner_row in partner_rows:
-            partner_row["supplier_balance"] = None
-            if not _cashier_permission_enabled("can_view_own_reports"):
-                partner_row["customer_balance"] = None
-    return jsonify(partners=partner_rows)
+    return jsonify(partners=db.query(sql, args))
 
 
 # ------------------------------------------------------------------
@@ -1412,18 +1145,9 @@ def api_partner_statement(partner_id):
             error="تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية"
         ), 400
 
-    # اتجاه الرصيد يتبع نوع الصفحة، حتى للسجلات القديمة المصنفة عميلًا وموردًا.
-    view_type = (request.args.get("type") or partner["partner_type"]).strip()
-    if view_type not in ("customer", "supplier"):
-        return jsonify(error="نوع كشف الحساب غير صحيح"), 400
-    if partner["partner_type"] not in (view_type, "both"):
-        return jsonify(error="هذا الطرف لا ينتمي إلى سجل " + ("العملاء" if view_type == "customer" else "الموردين")), 400
-    is_supplier = view_type == "supplier"
-    # Restrict each statement to its own control account, including legacy both records.
-    partner_account_id = partner["payable_account_id"] if is_supplier else partner["receivable_account_id"]
-    if not partner_account_id:
-        expected_account = "2101" if is_supplier else "1201"
-        return jsonify(error=f"لا يوجد حساب محاسبي مرتبط بالطرف في هذه الصفحة ({expected_account})"), 400
+    # العميل: مدين - دائن
+    # المورد: دائن - مدين
+    is_supplier = partner["partner_type"] == "supplier"
 
     def signed(debit, credit):
         if is_supplier:
@@ -1453,11 +1177,10 @@ def api_partner_statement(partner_id):
             JOIN journal_entries je ON je.id=jl.entry_id
             WHERE
                 jl.partner_id=?
-                AND jl.account_id=?
                 AND je.status='posted'
                 AND je.entry_date < ?
             """,
-            (partner_id, partner_account_id, date_from),
+            (partner_id, date_from),
         )
 
         opening_debit = round(opening["debit"] or 0, 2)
@@ -1467,11 +1190,10 @@ def api_partner_statement(partner_id):
     # ---------------------------------------------------------
     # حركات الفترة
     # ---------------------------------------------------------
-    args = [partner_id, partner_account_id]
+    args = [partner_id]
 
     where = """
         jl.partner_id=?
-        AND jl.account_id=?
         AND je.status='posted'
     """
 
@@ -1570,189 +1292,6 @@ def api_partner_statement(partner_id):
         },
         entries=entries,
     )
-
-@app.route("/api/partner-settlement-accounts")
-@require_write
-def api_partner_settlement_accounts():
-    """حسابات الصندوق والبنوك النشطة المتاحة لتحصيل العملاء وسداد الموردين."""
-    company_id = _current_company_id()
-    rows = db.query(
-        """SELECT id, acc_no, name
-           FROM accounts
-           WHERE is_active=1 AND COALESCE(is_group,0)=0
-             AND acc_no LIKE '11%'
-             AND (company_id IS NULL OR company_id=?)
-           ORDER BY CAST(acc_no AS INTEGER), acc_no""",
-        (company_id,),
-    )
-    return jsonify(accounts=rows)
-
-
-@app.route("/api/partners/<int:partner_id>/settlement", methods=["POST"])
-@require_write
-def api_partner_settlement(partner_id):
-    """تحصيل من عميل أو سداد لمورد بقيد يومية مرحل ومتوازن."""
-    d = request.json or {}
-    view_type = (d.get("partner_type") or "").strip()
-    if view_type not in ("customer", "supplier"):
-        return jsonify(error="نوع التسوية غير صحيح"), 400
-
-    partner = db.query_one(
-        "SELECT * FROM business_partners WHERE id=? AND is_active=1",
-        (partner_id,),
-    )
-    if not partner:
-        return jsonify(error="العميل/المورد غير موجود أو غير نشط"), 404
-    if partner["partner_type"] not in (view_type, "both"):
-        return jsonify(error="هذا الطرف لا ينتمي إلى سجل " + ("العملاء" if view_type == "customer" else "الموردين")), 400
-
-    try:
-        amount = round(float(d.get("amount") or 0), 2)
-        cash_account_id = int(d.get("cash_account_id") or 0)
-    except (TypeError, ValueError):
-        return jsonify(error="المبلغ أو حساب الصندوق/البنك غير صحيح"), 400
-    if not math.isfinite(amount) or amount <= 0:
-        return jsonify(error="أدخل مبلغ تسوية أكبر من صفر"), 400
-
-    entry_date = (d.get("entry_date") or date.today().isoformat()).strip()
-    try:
-        datetime.strptime(entry_date, "%Y-%m-%d")
-    except ValueError:
-        return jsonify(error="تاريخ التسوية غير صحيح"), 400
-
-    company_id = partner["company_id"]
-    period = _period_for_date(entry_date, company_id)
-    period_error = _open_period_error(entry_date, company_id)
-    if period_error:
-        return jsonify(error=period_error), 400
-
-    branch = db.query_one(
-        "SELECT id FROM branches WHERE company_id=? ORDER BY id LIMIT 1",
-        (company_id,),
-    )
-    company = db.query_one(
-        "SELECT id, currency_id FROM companies WHERE id=?",
-        (company_id,),
-    )
-    if not branch or not company:
-        return jsonify(error="تعذر تحديد الشركة أو الفرع لإثبات التسوية"), 400
-
-    region = (d.get("region") or "المركز الرئيسي").strip()
-    if region not in db.load_regions():
-        return jsonify(error="اختر المنطقة الصحيحة"), 400
-
-    cash_account = db.query_one(
-        """SELECT id, acc_no, name FROM accounts
-           WHERE id=? AND is_active=1 AND COALESCE(is_group,0)=0
-             AND acc_no LIKE '11%'
-             AND (company_id IS NULL OR company_id=?)""",
-        (cash_account_id, company_id),
-    )
-    if not cash_account:
-        return jsonify(error="اختر حساب صندوق أو بنك نشطًا"), 400
-
-    if view_type == "customer":
-        partner_account_id = partner["receivable_account_id"]
-        expected_account_no = "1201"
-        balance_sql = """SELECT COALESCE(SUM(jl.debit-jl.credit),0) AS balance
-                         FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id
-                         WHERE jl.partner_id=? AND jl.account_id=? AND je.status='posted'"""
-        balance_label = "المبلغ المستحق على العميل"
-        description_prefix = "تحصيل من العميل"
-    else:
-        partner_account_id = partner["payable_account_id"]
-        expected_account_no = "2101"
-        balance_sql = """SELECT COALESCE(SUM(jl.credit-jl.debit),0) AS balance
-                         FROM journal_lines jl JOIN journal_entries je ON je.id=jl.entry_id
-                         WHERE jl.partner_id=? AND jl.account_id=? AND je.status='posted'"""
-        balance_label = "المبلغ المستحق للمورد"
-        description_prefix = "سداد للمورد"
-
-    partner_account = db.query_one(
-        "SELECT id, acc_no, name FROM accounts WHERE id=? AND is_active=1",
-        (partner_account_id,),
-    ) if partner_account_id else None
-    if not partner_account or partner_account["acc_no"] != expected_account_no:
-        return jsonify(error="الحساب المحاسبي المرتبط بالطرف غير موجود أو غير صحيح"), 400
-
-    note = (d.get("description") or "").strip()
-    description = note or f"{description_prefix} {partner['name']}"
-    if len(description) > 240:
-        description = description[:240]
-
-    conn = db.connect()
-    entry_id = None
-    movement_no = None
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        current = conn.execute(balance_sql, (partner_id, partner_account_id)).fetchone()
-        outstanding = round(float(current["balance"] or 0), 2)
-        if outstanding <= 0.004:
-            conn.rollback()
-            return jsonify(error="لا يوجد رصيد مستحق لتسويته لهذا الطرف"), 400
-        if amount > outstanding + 0.004:
-            conn.rollback()
-            return jsonify(error=f"{balance_label}: {outstanding:,.2f}؛ لا يمكن تسوية مبلغ أكبر منه"), 400
-
-        movement_no = str(next_movement_no())
-        while conn.execute("SELECT 1 FROM journal_entries WHERE movement_no=?", (movement_no,)).fetchone():
-            try:
-                movement_no = str(int(movement_no) + 1)
-            except ValueError:
-                movement_no = str(int(datetime.now().timestamp() * 1000))
-
-        cur = conn.execute(
-            """INSERT INTO journal_entries
-               (movement_no, entry_date, description, region, status, entry_type,
-                created_by, company_id, branch_id, fiscal_year_id, period_id,
-                currency_id, exchange_rate)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)""",
-            (movement_no, entry_date, description, region, "posted", "تسوية",
-             g.user["id"], company_id, branch["id"], period["fiscal_year_id"],
-             period["id"], company["currency_id"]),
-        )
-        entry_id = cur.lastrowid
-        if view_type == "customer":
-            conn.execute(
-                "INSERT INTO journal_lines (entry_id,account_id,partner_id,debit,credit) VALUES (?,?,NULL,?,0)",
-                (entry_id, cash_account_id, amount),
-            )
-            conn.execute(
-                "INSERT INTO journal_lines (entry_id,account_id,partner_id,debit,credit) VALUES (?,?,?,0,?)",
-                (entry_id, partner_account_id, partner_id, amount),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO journal_lines (entry_id,account_id,partner_id,debit,credit) VALUES (?,?,?,?,0)",
-                (entry_id, partner_account_id, partner_id, amount),
-            )
-            conn.execute(
-                "INSERT INTO journal_lines (entry_id,account_id,partner_id,debit,credit) VALUES (?,?,NULL,0,?)",
-                (entry_id, cash_account_id, amount),
-            )
-        conn.execute(
-            "INSERT INTO audit_log (user,action,details) VALUES (?,?,?)",
-            (g.user["full_name"], "تسوية حساب عميل" if view_type == "customer" else "تسوية حساب مورد",
-             f"{movement_no} - {partner['code']} - {partner['name']} - {amount:,.2f}"),
-        )
-        conn.commit()
-    except db.IntegrityError:
-        conn.rollback()
-        return jsonify(error="تعذر حفظ التسوية بسبب تعارض في رقم الحركة أو الحسابات"), 400
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-    return jsonify(
-        ok=True,
-        id=entry_id,
-        movement_no=movement_no,
-        amount=amount,
-        balance_after=round(outstanding - amount, 2),
-    ), 201
-
 
 @app.route("/api/accounts")
 def api_accounts():
@@ -3281,8 +2820,6 @@ def api_product_price_create():
     is_default = 1 if data.get("is_default", True) else 0
     is_active = 1 if data.get("is_active", True) else 0
 
-    if session.get("cashier_mode") and price_type != "sale":
-        return jsonify(ok=False, error="غير مصرح بالاطلاع على أسعار الشراء"), 403
     if price_type not in ("sale", "purchase"):
         return jsonify({
             "ok": False,
@@ -3695,7 +3232,7 @@ def api_product_price_lookup():
             "error": "product_id و unit_id و currency_id مطلوبة"
         }), 400
 
-    price_type = "sale" if session.get("cashier_mode") else (
+    price_type = (
         request.args.get("price_type") or "sale"
     ).strip().lower()
 
@@ -3797,10 +3334,10 @@ def api_products():
         INNER JOIN units u
                 ON u.id = p.base_unit_id
                AND u.company_id = p.company_id
-        WHERE p.company_id=? AND (?=0 OR p.is_active=1)
+        WHERE p.company_id=?
         ORDER BY p.code, p.id
         """,
-        (company_id, 1 if session.get("cashier_mode") else 0),
+        (company_id,),
     )
 
     return jsonify(items=rows)
@@ -4769,8 +4306,6 @@ def api_warehouse_delete(warehouse_id):
 
 @app.route("/api/stock-balances", methods=["GET"])
 def api_stock_balances():
-    if session.get("cashier_mode") and (not getattr(g, "cashier_session", None) or not _cashier_permission_enabled("can_view_stock")):
-        return jsonify(ok=False, error="لا يملك الكاشير صلاحية عرض المخزون أو لا توجد وردية مفتوحة"), 403
     company_id = _current_company_id()
 
     if not company_id:
@@ -7240,9 +6775,6 @@ def api_sales_list():
             "error": "لا توجد شركة حالية"
         }), 400
 
-    if session.get("cashier_mode") and not _cashier_permission_enabled("can_view_own_reports"):
-        return jsonify(ok=True, rows=[])
-
     rows = db.query("""
         SELECT
             si.id,
@@ -7282,10 +6814,8 @@ def api_sales_list():
             ON w.id = si.warehouse_id
            AND w.company_id = si.company_id
         WHERE si.company_id = ? AND si.is_held = 0
-          AND (? = 0 OR si.session_id = ?)
         ORDER BY si.id DESC
-    """, (company_id, 1 if session.get("cashier_mode") else 0,
-          g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1))
+    """, (company_id,))
 
     return jsonify({
         "ok": True,
@@ -7294,7 +6824,7 @@ def api_sales_list():
 
 
 @app.route("/api/sales", methods=["POST"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sale_create():
     company_id = _current_company_id()
 
@@ -7306,11 +6836,8 @@ def api_sale_create():
 
 
     
-    if session.get("cashier_mode"):
-        _session_id = g.cashier_session["id"] if getattr(g, "cashier_session", None) else None
-    else:
-        _sr = db.query_one("SELECT id FROM cashier_sessions WHERE company_id=? AND user_id=? AND status='open' LIMIT 1", (company_id, g.user["id"]))
-        _session_id = _sr["id"] if _sr else None
+    _sr = db.query_one("SELECT id FROM cashier_sessions WHERE company_id=? AND user_id=? AND status='open' LIMIT 1", (company_id, g.user["id"]))
+    _session_id = _sr["id"] if _sr else None
 
     data = request.get_json(silent=True) or {}
 
@@ -7638,7 +7165,7 @@ def api_sale_create():
 # =========================
 
 @app.route("/api/sales/<int:sale_id>/items", methods=["POST"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sale_item_create(sale_id):
     company_id = _current_company_id()
 
@@ -7781,9 +7308,6 @@ def api_sale_item_create(sale_id):
                 "ok": False,
                 "error": "الخصم لا يمكن أن يتجاوز قيمة الصنف"
             }), 400
-        discount_error = _cashier_discount_error(discount, line_subtotal)
-        if discount_error:
-            return jsonify(ok=False, error=discount_error), 403
 
         taxable_amount = line_subtotal - discount
         tax_amount = taxable_amount * tax_rate / 100
@@ -7881,7 +7405,6 @@ def api_sale_item_create(sale_id):
 
 
 @app.route("/api/sales/<int:sale_id>/items", methods=["GET"])
-@require_cashier_sale_read
 def api_sale_items(sale_id):
     company_id = _current_company_id()
 
@@ -7904,8 +7427,6 @@ def api_sale_items(sale_id):
                 "ok": False,
                 "error": "فاتورة البيع غير موجودة"
             }), 404
-        if session.get("cashier_mode") and not _cashier_sale_in_current_session(sale_id):
-            return jsonify(ok=False, error="الفاتورة لا تخص ورديتك الحالية"), 404
 
  
         rows = conn.execute("""
@@ -7987,11 +7508,6 @@ def api_sale_items(sale_id):
             "notes": row["notes"] or ""
         })
 
-    if session.get("cashier_mode") and not _cashier_permission_enabled("can_view_stock"):
-        for item in items:
-            item["stock_quantity"] = None
-            item["last_purchase_price"] = None
-
     return jsonify({
         "ok": True,
         "sale_id": sale_id,
@@ -8041,78 +7557,6 @@ def fiscal_periods_page():
     return render_template("fiscal_periods.html")
 
 
-def _fiscal_year_preservation_counts(company_id):
-    """Counts records that remain shared and are never copied/deleted on year rollover."""
-    def count(sql, args=(company_id,)):
-        row = db.query_one(sql, args)
-        return int((row or {}).get("total", 0) or 0)
-
-    return {
-        "products": count("SELECT COUNT(*) AS total FROM products WHERE company_id=?"),
-        "categories": count("SELECT COUNT(*) AS total FROM product_categories WHERE company_id=?"),
-        "units": count("SELECT COUNT(*) AS total FROM units WHERE company_id=?"),
-        "customers": count("SELECT COUNT(*) AS total FROM business_partners WHERE company_id=? AND partner_type IN ('customer','both')"),
-        "suppliers": count("SELECT COUNT(*) AS total FROM business_partners WHERE company_id=? AND partner_type IN ('supplier','both')"),
-        "price_lists": count("SELECT COUNT(*) AS total FROM product_prices WHERE company_id=?"),
-        "barcodes": count("SELECT COUNT(*) AS total FROM product_barcodes WHERE company_id=?"),
-        "warehouses": count("SELECT COUNT(*) AS total FROM warehouses WHERE company_id=?"),
-        "stock_balances": count("SELECT COUNT(*) AS total FROM warehouse_stock WHERE company_id=?"),
-        "sales_invoices": count("SELECT COUNT(*) AS total FROM sales_invoices WHERE company_id=?"),
-        "purchase_invoices": count("SELECT COUNT(*) AS total FROM purchase_invoices WHERE company_id=?"),
-        "journal_entries": count("SELECT COUNT(*) AS total FROM journal_entries WHERE company_id=?"),
-        "stock_movements": count("SELECT COUNT(*) AS total FROM stock_movements WHERE company_id=?"),
-    }
-
-
-@app.route("/api/fiscal-years/rollover-preview", methods=["GET"])
-@admin_required
-def api_fiscal_year_rollover_preview():
-    """Read-only preview: shared master data and historical transactions are retained."""
-    date_from = (request.args.get("date_from") or "").strip()
-    date_to = (request.args.get("date_to") or "").strip()
-    name = (request.args.get("name") or "").strip()
-    if not name or not date_from or not date_to:
-        return jsonify(ok=False, error="أدخل اسم السنة وتاريخ البداية والنهاية أولاً"), 400
-    try:
-        df = datetime.strptime(date_from, "%Y-%m-%d").date()
-        dt = datetime.strptime(date_to, "%Y-%m-%d").date()
-    except ValueError:
-        return jsonify(ok=False, error="صيغة التاريخ غير صحيحة"), 400
-    if dt < df:
-        return jsonify(ok=False, error="تاريخ النهاية يجب أن يكون بعد تاريخ البداية"), 400
-    company = db.query_one("SELECT id FROM companies ORDER BY id LIMIT 1")
-    if not company:
-        return jsonify(ok=False, error="لا توجد شركة أساسية"), 400
-    company_id = company["id"]
-    overlap = db.query_one(
-        """SELECT id, name FROM fiscal_years
-           WHERE company_id=? AND date_from<=? AND date_to>=? LIMIT 1""",
-        (company_id, date_to, date_from),
-    )
-    duplicate_name = db.query_one(
-        "SELECT id, name FROM fiscal_years WHERE company_id=? AND lower(name)=lower(?) LIMIT 1",
-        (company_id, name),
-    )
-    counts = _fiscal_year_preservation_counts(company_id)
-    return jsonify(
-        ok=True,
-        can_create=not bool(overlap) and not bool(duplicate_name),
-        overlap_name=overlap["name"] if overlap else None,
-        duplicate_name=duplicate_name["name"] if duplicate_name else None,
-        name=name,
-        date_from=date_from,
-        date_to=date_to,
-        preserved=counts,
-        policy={
-            "master_data": "shared",
-            "historical_transactions": "retained",
-            "deletion": False,
-            "copying": False,
-        },
-        message="سيتم إنشاء السنة وفتراتها فقط. الأصناف والعملاء والموردون والأسعار والأرصدة والسجلات التاريخية تبقى في قواعدها دون نسخ أو حذف.",
-    )
-
-
 @app.route("/api/fiscal-years", methods=["GET"])
 @admin_required
 def api_fiscal_years():
@@ -8148,12 +7592,6 @@ def api_fiscal_year_create():
     )
     if overlap:
         return jsonify(error="توجد سنة مالية متداخلة مع هذه الفترة"), 400
-    # نسخة أمان إلزامية قبل إنشاء سنة جديدة. إذا فشل النسخ فلن تتغير البيانات.
-    try:
-        backup_name = db.create_backup(prefix="manual")
-    except Exception as exc:
-        return jsonify(error=f"تعذر إنشاء نسخة الأمان؛ لم يتم إنشاء السنة: {exc}"), 500
-
     conn = db.connect()
     try:
         with conn:
@@ -8178,24 +7616,11 @@ def api_fiscal_year_create():
                 if m == 13:
                     y, m = y + 1, 1
     except db.IntegrityError:
-        return jsonify(error="تعذر إنشاء السنة المالية — تحقق من عدم تكرار الاسم أو الفترات", backup_name=backup_name), 400
-    except Exception as exc:
-        return jsonify(error=f"فشل إنشاء السنة وتم الاحتفاظ بنسخة الأمان: {exc}", backup_name=backup_name), 500
+        return jsonify(error="تعذر إنشاء السنة المالية — تحقق من عدم تكرار الاسم أو الفترات"), 400
     finally:
         conn.close()
-    preserved = _fiscal_year_preservation_counts(company["id"])
-    db.audit(
-        g.user["full_name"],
-        "إنشاء سنة مالية آمنة",
-        f"{name}: {date_from} إلى {date_to} | backup={backup_name} | retained_master_and_history=1",
-    )
-    return jsonify(
-        ok=True,
-        id=fy_id,
-        backup_name=backup_name,
-        preserved=preserved,
-        message="تم إنشاء السنة وفتراتها دون حذف أو نسخ البيانات الأساسية أو السجلات التاريخية.",
-    )
+    db.audit(g.user["full_name"], "إنشاء سنة مالية", f"{name}: {date_from} إلى {date_to}")
+    return jsonify(ok=True, id=fy_id)
 
 
 @app.route("/api/fiscal-years/<int:fyid>/periods")
@@ -8751,69 +8176,17 @@ def api_journal_import():
                 )
             ), 400
 
-        # ربط أسطر حسابات العملاء والموردين بكود الطرف صراحةً.
-        # لا نستنتج صاحب الحركة من رقم الحساب وحده؛ فقد يشترك عدة أطراف في الحساب الرقابي نفسه.
-        prepared_lines = []
-        for ln in g_["lines"]:
-            partner_code = (ln.get("partner_code") or "").strip()
-            acc_no = (ln.get("acc_no") or "").strip()
-            partner_id = None
-
-            if acc_no in ("1201", "2101") and not partner_code:
-                label = "العملاء 1201" if acc_no == "1201" else "الموردون 2101"
-                return jsonify(error=(
-                    f"رقم الحركة {g_['movement']}، صف Excel {ln['row']}: "
-                    f"يجب إدخال كود الطرف في عمود (كود الطرف) عند استخدام حساب {label}"
-                )), 400
-
-            if partner_code:
-                if acc_no not in ("1201", "2101"):
-                    return jsonify(error=(
-                        f"رقم الحركة {g_['movement']}، صف Excel {ln['row']}: "
-                        "كود الطرف مسموح فقط مع حساب العملاء 1201 أو الموردين 2101"
-                    )), 400
-
-                partner = db.query_one(
-                    """SELECT id, partner_type, receivable_account_id, payable_account_id
-                       FROM business_partners
-                       WHERE company_id=? AND code=? AND is_active=1
-                       LIMIT 1""",
-                    (company["id"], partner_code),
-                )
-                if not partner:
-                    return jsonify(error=(
-                        f"رقم الحركة {g_['movement']}، صف Excel {ln['row']}: "
-                        f"كود الطرف {partner_code} غير موجود أو غير نشط في الشركة الحالية"
-                    )), 400
-
-                account = db.query_one(
-                    "SELECT id FROM accounts WHERE acc_no=? AND is_active=1 LIMIT 1",
-                    (acc_no,),
-                )
-                if not account:
-                    return jsonify(error=f"حساب {acc_no} غير موجود أو غير نشط"), 400
-
-                if acc_no == "1201":
-                    if partner["partner_type"] not in ("customer", "both") or partner["receivable_account_id"] != account["id"]:
-                        return jsonify(error=f"كود الطرف {partner_code} ليس عميلًا مرتبطًا بحساب العملاء 1201"), 400
-                else:
-                    if partner["partner_type"] not in ("supplier", "both") or partner["payable_account_id"] != account["id"]:
-                        return jsonify(error=f"كود الطرف {partner_code} ليس موردًا مرتبطًا بحساب الموردين 2101"), 400
-                partner_id = partner["id"]
-
-            prepared_lines.append({**ln, "partner_id": partner_id})
-
-        prepared_groups.append((g_, dt, period, prepared_lines))
+        prepared_groups.append((g_, dt, period))
 
     added = 0
     drafts_count = 0
     new_accounts = 0
     skipped = len(errors)
 
-    for g_, dt, period, prepared_lines in prepared_groups:
+    for g_, dt, period in prepared_groups:
         lines = []
 
-        for ln in prepared_lines:
+        for ln in g_["lines"]:
             acc = db.query_one(
                 "SELECT id FROM accounts WHERE acc_no=?",
                 (ln["acc_no"],)
@@ -8831,7 +8204,6 @@ def api_journal_import():
 
             lines.append({
                 "account_id": acc_id,
-                "partner_id": ln.get("partner_id"),
                 "debit": ln["debit"],
                 "credit": ln["credit"]
             })
@@ -8904,12 +8276,11 @@ def api_journal_import():
         for ln in lines:
             db.execute(
                 """INSERT INTO journal_lines
-                   (entry_id, account_id, partner_id, debit, credit)
-                   VALUES (?,?,?,?,?)""",
+                   (entry_id, account_id, debit, credit)
+                   VALUES (?,?,?,?)""",
                 (
                     eid,
                     ln["account_id"],
-                    ln["partner_id"],
                     ln["debit"],
                     ln["credit"]
                 )
@@ -9499,9 +8870,11 @@ def api_users_create():
     username = _sanitize((d.get("username") or "").strip().lower())
     full_name = _sanitize((d.get("full_name") or "").strip())
     role = d.get("role") if d.get("role") in ROLES else "accountant"
-    password = str(d.get("password") or "")
-    if not username or not full_name or not password:
-        return jsonify(error="الاسم واسم المستخدم وكلمة المرور مطلوبة"), 400
+    password = d.get("password") or ""
+    if not username or not full_name or len(password) < 8:
+        return jsonify(error="بيانات غير مكتملة (كلمة المرور 8 أحرف على الأقل)"), 400
+    if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password):
+        return jsonify(error="كلمة المرور يجب أن تحتوي على حروف وأرقام"), 400
     if db.query_one("SELECT id FROM users WHERE username=?", (username,)):
         return jsonify(error="اسم المستخدم موجود بالفعل"), 400
     db.execute(
@@ -9516,9 +8889,11 @@ def api_users_create():
 @admin_required
 def api_users_password(uid):
     d = request.json or {}
-    password = str(d.get("password") or "")
-    if not password:
-        return jsonify(error="كلمة المرور مطلوبة"), 400
+    password = d.get("password") or ""
+    if len(password) < 8:
+        return jsonify(error="كلمة المرور 8 أحرف على الأقل"), 400
+    if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password):
+        return jsonify(error="كلمة المرور يجب أن تحتوي على حروف وأرقام"), 400
     u = db.query_one("SELECT * FROM users WHERE id=?", (uid,))
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
@@ -9604,12 +8979,16 @@ def api_users_delete(uid):
 @app.route("/api/me/password", methods=["POST"])
 def api_me_password():
     d = request.json or {}
-    old = str(d.get("old") or "")
-    new = str(d.get("new") or "")
+    old = d.get("old") or ""
+    new = d.get("new") or ""
     if not check_password_hash(g.user["password_hash"], old):
         return jsonify(error="كلمة المرور الحالية غير صحيحة"), 400
-    if not new:
-        return jsonify(error="كلمة المرور الجديدة مطلوبة"), 400
+    if len(new) < 8:
+        return jsonify(error="كلمة المرور الجديدة 8 أحرف على الأقل"), 400
+    if new == old:
+        return jsonify(error="كلمة المرور الجديدة مختلفة عن الحالية"), 400
+    if not re.search(r'[A-Za-z]', new) or not re.search(r'\d', new):
+        return jsonify(error="كلمة المرور يجب أن تحتوي على حروف وأرقام"), 400
     db.execute("UPDATE users SET password_hash=? WHERE id=?",
                (generate_password_hash(new), g.user["id"]))
     db.audit(g.user["full_name"], "تغيير كلمة مروره الشخصية")
@@ -10313,7 +9692,7 @@ def template_journal():
 # ===== SALES_FULL_BUILD_20261008 =====
 
 @app.route("/api/sales/<int:sale_id>", methods=["PUT"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sales_update(sale_id):
     company_id = _current_company_id()
 
@@ -10559,7 +9938,7 @@ def api_sales_update(sale_id):
 
 
 @app.route("/api/sales/<int:sale_id>", methods=["DELETE"])
-@require_cashier_permission("can_cancel_draft")
+@require_write
 def api_sales_delete(sale_id):
     company_id = _current_company_id()
 
@@ -10618,7 +9997,7 @@ def api_sales_delete(sale_id):
 
 
 @app.route("/api/sales/<int:sale_id>/items/<int:item_id>", methods=["PUT"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sales_item_update(sale_id, item_id):
     company_id = _current_company_id()
 
@@ -10737,9 +10116,6 @@ def api_sales_item_update(sale_id, item_id):
                 "ok": False,
                 "error": "الخصم أكبر من إجمالي السطر"
             }), 400
-        discount_error = _cashier_discount_error(discount, gross)
-        if discount_error:
-            return jsonify(ok=False, error=discount_error), 403
 
         taxable = round(gross - discount, 2)
         tax_amount = round(taxable * tax_rate / 100, 2)
@@ -10839,7 +10215,7 @@ def api_sales_item_update(sale_id, item_id):
 
 
 @app.route("/api/sales/<int:sale_id>/items/<int:item_id>", methods=["DELETE"])
-@require_cashier_permission("can_cancel_draft")
+@require_write
 def api_sales_item_delete(sale_id, item_id):
     company_id = _current_company_id()
 
@@ -10940,7 +10316,7 @@ def api_sales_item_delete(sale_id, item_id):
 
 
 @app.route("/api/sales/<int:sale_id>/approve", methods=["POST"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sales_approve(sale_id):
     company_id = _current_company_id()
     req_data = request.get_json(silent=True) or {}
@@ -11125,9 +10501,6 @@ def api_sales_approve(sale_id):
 
         if not math.isfinite(invoice_discount) or invoice_discount < 0 or invoice_discount > grand_total:
             return jsonify({"ok": False, "error": "خصم الفاتورة غير صالح"}), 400
-        discount_error = _cashier_discount_error(discount_total + invoice_discount, subtotal)
-        if discount_error:
-            return jsonify(ok=False, error=discount_error), 403
 
         grand_total = round(grand_total - invoice_discount, 2)
         discount_total = round(discount_total + invoice_discount, 2)
@@ -11545,13 +10918,10 @@ def api_sales_approve(sale_id):
             raise RuntimeError("تعذر اعتماد الفاتورة؛ ربما تم اعتمادها مسبقًا")
 
         # تحديث الوردية بالقيمة النهائية بعد الخصومات، داخل نفس المعاملة لمنع العد المسبق أو المكرر.
-        if session.get("cashier_mode"):
-            current_session = {"id": g.cashier_session["id"]} if getattr(g, "cashier_session", None) else None
-        else:
-            current_session = conn.execute(
-                "SELECT id FROM cashier_sessions WHERE company_id=? AND user_id=? AND status='open' LIMIT 1",
-                (company_id, g.user["id"])
-            ).fetchone()
+        current_session = conn.execute(
+            "SELECT id FROM cashier_sessions WHERE company_id=? AND user_id=? AND status='open' LIMIT 1",
+            (company_id, g.user["id"])
+        ).fetchone()
         if current_session:
             conn.execute("UPDATE sales_invoices SET session_id=? WHERE id=? AND company_id=?", (current_session["id"], sale_id, company_id))
             conn.execute(
@@ -11601,7 +10971,7 @@ def api_sales_approve(sale_id):
 
 
 @app.route("/api/sales/<int:sale_id>/recalculate", methods=["POST"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sales_recalculate(sale_id):
     company_id = _current_company_id()
     req_data = request.get_json(silent=True) or {}
@@ -11718,7 +11088,6 @@ def api_sales_recalculate(sale_id):
 
 
 @app.route("/print/sale/<int:sale_id>")
-@require_cashier_permission("can_sell")
 def print_sale(sale_id):
     company_id = _current_company_id()
     if not company_id:
@@ -11736,9 +11105,7 @@ def print_sale(sale_id):
           ON w.id = si.warehouse_id
          AND w.company_id = si.company_id
         WHERE si.id = ? AND si.company_id = ?
-          AND (?=0 OR si.session_id=?)
-    """, (sale_id, company_id, 1 if session.get("cashier_mode") else 0,
-          g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1))
+    """, (sale_id, company_id))
     if not sale:
         abort(404)
     if sale["status"] != "approved":
@@ -11816,7 +11183,7 @@ def api_remove_logo():
 # ============================================================
 
 @app.route("/api/cashier-sessions/open", methods=["POST"])
-@cashier_session_open_required
+@require_write
 def api_session_open():
     company_id = _current_company_id()
     if not company_id:
@@ -11826,19 +11193,14 @@ def api_session_open():
         opening_cash = float(d.get("opening_cash") or 0)
     except (TypeError, ValueError):
         return jsonify(ok=False, error="رصيد الافتتاح غير صالح"), 400
-    if not math.isfinite(opening_cash) or opening_cash < 0:
-        return jsonify(ok=False, error="رصيد الافتتاح يجب أن يكون رقمًا صالحًا غير سالب"), 400
-    if session.get("cashier_mode"):
-        if not getattr(g, "cashier", None):
-            return jsonify(ok=False, error="أعد تسجيل الدخول بحساب كاشير نشط"), 401
-        cashier_id = int(g.cashier["id"])
-    else:
-        cashier_id = d.get("cashier_id")
-        if cashier_id is not None:
-            try:
-                cashier_id = int(cashier_id)
-            except (TypeError, ValueError):
-                cashier_id = None
+    if opening_cash < 0:
+        return jsonify(ok=False, error="رصيد الافتتاح لا يمكن أن يكون سالبًا"), 400
+    cashier_id = d.get("cashier_id")
+    if cashier_id is not None:
+        try:
+            cashier_id = int(cashier_id)
+        except (TypeError, ValueError):
+            cashier_id = None
     # التحقق من وجود كاشير نشط
     cashier = None
     if cashier_id:
@@ -11867,11 +11229,6 @@ def api_session_open():
         )
     cashier_name = cashier["full_name"] if cashier else g.user["full_name"]
     db.audit(g.user["full_name"], "فتح وردية كاشير", f"#{session_id} - {cashier_name} - رصيد: {opening_cash}")
-    if session.get("cashier_mode"):
-        session["cashier_id"] = cashier_id
-        session["cashier_session_id"] = session_id
-        session.pop("cashier_pending_id", None)
-        session.permanent = True
     return jsonify(ok=True, session_id=session_id, cashier_name=cashier_name)
 
 
@@ -11880,30 +11237,17 @@ def api_session_current():
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
-    if session.get("cashier_mode"):
-        s = db.query_one(
-            """SELECT cs.*, u.full_name AS user_name,
-                      cz.full_name AS cashier_name,
-                      cz.permissions_json AS cashier_permissions
-               FROM cashier_sessions cs
-               LEFT JOIN users u ON u.id = cs.user_id
-               LEFT JOIN cashiers cz ON cz.id = cs.cashier_id
-               WHERE cs.id=? AND cs.company_id=? AND cs.user_id=? AND cs.cashier_id=? AND cs.status='open'
-               LIMIT 1""",
-            (g.cashier_session["id"], company_id, g.user["id"], g.cashier["id"])
-        ) if getattr(g, "cashier_session", None) and getattr(g, "cashier", None) else None
-    else:
-        s = db.query_one(
-            """SELECT cs.*, u.full_name AS user_name,
-                      cz.full_name AS cashier_name,
-                      cz.permissions_json AS cashier_permissions
-               FROM cashier_sessions cs
-               LEFT JOIN users u ON u.id = cs.user_id
-               LEFT JOIN cashiers cz ON cz.id = cs.cashier_id
-               WHERE cs.company_id = ? AND cs.user_id = ? AND cs.status = 'open'
-               LIMIT 1""",
-            (company_id, g.user["id"])
-        )
+    s = db.query_one(
+        """SELECT cs.*, u.full_name AS user_name,
+                  cz.full_name AS cashier_name,
+                  cz.permissions_json AS cashier_permissions
+           FROM cashier_sessions cs
+           LEFT JOIN users u ON u.id = cs.user_id
+           LEFT JOIN cashiers cz ON cz.id = cs.cashier_id
+           WHERE cs.company_id = ? AND cs.user_id = ? AND cs.status = \x27open\x27
+           LIMIT 1""",
+        (company_id, g.user["id"])
+    )
     if not s:
         return jsonify(ok=True, session=None)
     # حساب الإجماليات الحية من الفواتير المعتمدة في هذه الوردية
@@ -11946,7 +11290,6 @@ def api_session_current():
         ok=True,
         session={
             "id": s["id"],
-            "cashier_id": s.get("cashier_id"),
             "opened_at": s["opened_at"],
             "opening_cash": float(s["opening_cash"] or 0),
             "user_name": s.get("user_name", ""),
@@ -11964,7 +11307,7 @@ def api_session_current():
 
 
 @app.route("/api/cashier-sessions/<int:sid>/close", methods=["POST"])
-@cashier_session_close_required
+@require_write
 def api_session_close(sid):
     company_id = _current_company_id()
     if not company_id:
@@ -11978,10 +11321,7 @@ def api_session_close(sid):
     if s["status"] != "open":
         return jsonify(ok=False, error="الوردية مغلقة بالفعل"), 400
     # فقط صاحب الوردية أو المدير
-    if session.get("cashier_mode"):
-        if not getattr(g, "cashier_session", None) or int(g.cashier_session["id"]) != int(sid) or int(s.get("cashier_id") or 0) != int(g.cashier["id"]):
-            return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
-    elif s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
         return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
     d = request.get_json(silent=True) or {}
     try:
@@ -12010,11 +11350,7 @@ def api_session_close(sid):
         if current["status"] != "open":
             conn.rollback()
             return jsonify(ok=False, error="الوردية مغلقة بالفعل"), 400
-        if session.get("cashier_mode"):
-            if not getattr(g, "cashier_session", None) or int(g.cashier_session["id"]) != int(sid) or int(current["cashier_id"] or 0) != int(g.cashier["id"]):
-                conn.rollback()
-                return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
-        elif current["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+        if current["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
             conn.rollback()
             return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
         s = dict(current)
@@ -12072,11 +11408,6 @@ def api_session_close(sid):
         return jsonify(ok=False, error="تعذر إغلاق الوردية؛ تم التراجع عن جميع التغييرات"), 500
     finally:
         conn.close()
-
-    if session.get("cashier_mode"):
-        session.pop("cashier_id", None)
-        session.pop("cashier_session_id", None)
-        session.pop("cashier_pending_id", None)
 
     # --- بداية إرسال تقرير الوردية بالبريد الإلكتروني ---
     try:
@@ -12139,29 +11470,6 @@ def api_sessions_list():
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
-    if session.get("cashier_mode"):
-        if not _cashier_permission_enabled("can_view_own_reports"):
-            return jsonify(ok=True, sessions=[])
-        if _cashier_permission_enabled("can_view_others_sessions"):
-            rows = db.query(
-                """SELECT cs.*, u.full_name AS user_name, cz.full_name AS cashier_name
-                   FROM cashier_sessions cs
-                   LEFT JOIN users u ON u.id=cs.user_id
-                   LEFT JOIN cashiers cz ON cz.id=cs.cashier_id
-                   WHERE cs.company_id=? ORDER BY cs.id DESC LIMIT 100""",
-                (company_id,)
-            )
-        else:
-            rows = db.query(
-                """SELECT cs.*, u.full_name AS user_name, cz.full_name AS cashier_name
-                   FROM cashier_sessions cs
-                   LEFT JOIN users u ON u.id=cs.user_id
-                   LEFT JOIN cashiers cz ON cz.id=cs.cashier_id
-                   WHERE cs.company_id=? AND cs.cashier_id=?
-                   ORDER BY cs.id DESC LIMIT 50""",
-                (company_id, g.cashier["id"])
-            )
-        return jsonify(ok=True, sessions=rows)
     # admin/accountant: كل الورديات. غيرهم: وردياتهم فقط.
     is_admin = g.user["role"] in ("admin", "accountant")
     if is_admin:
@@ -12199,14 +11507,7 @@ def api_session_detail(sid):
     )
     if not s:
         return jsonify(ok=False, error="الوردية غير موجودة"), 404
-    if session.get("cashier_mode"):
-        if not _cashier_permission_enabled("can_view_own_reports"):
-            return jsonify(ok=False, error="لا يملك الكاشير صلاحية عرض تفاصيل الفواتير"), 403
-        is_own_session = bool(getattr(g, "cashier_session", None) and int(g.cashier_session["id"]) == int(sid) and int(s.get("cashier_id") or 0) == int(g.cashier["id"]))
-        is_other_allowed = bool(_cashier_permission_enabled("can_view_others_sessions") and int(s.get("company_id") or 0) == int(company_id))
-        if not (is_own_session or is_other_allowed):
-            return jsonify(ok=False, error="غير مصرح بعرض هذه الوردية"), 403
-    elif s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
         return jsonify(ok=False, error="غير مصرح"), 403
     invoices = db.query(
         """SELECT id, invoice_no, invoice_date, grand_total, paid_amount, remaining_amount, payment_method, status
@@ -12223,15 +11524,14 @@ def api_session_detail(sid):
 # ============================================================
 
 @app.route("/api/sales/<int:sid>/hold", methods=["POST"])
-@require_cashier_permission("can_hold_sale")
+@require_write
 def api_sale_hold(sid):
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
     s = db.query_one(
-        "SELECT id, status, is_held FROM sales_invoices WHERE id=? AND company_id=? AND (?=0 OR session_id=?)",
-        (sid, company_id, 1 if session.get("cashier_mode") else 0,
-         g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1)
+        "SELECT id, status, is_held FROM sales_invoices WHERE id=? AND company_id=?",
+        (sid, company_id)
     )
     if not s:
         return jsonify(ok=False, error="الفاتورة غير موجودة"), 404
@@ -12244,15 +11544,14 @@ def api_sale_hold(sid):
     return jsonify(ok=True)
 
 @app.route("/api/sales/<int:sid>/resume", methods=["POST"])
-@require_cashier_permission("can_hold_sale")
+@require_write
 def api_sale_resume(sid):
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
     s = db.query_one(
-        "SELECT id, status, is_held FROM sales_invoices WHERE id=? AND company_id=? AND (?=0 OR session_id=?)",
-        (sid, company_id, 1 if session.get("cashier_mode") else 0,
-         g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1)
+        "SELECT id, status, is_held FROM sales_invoices WHERE id=? AND company_id=?",
+        (sid, company_id)
     )
     if not s:
         return jsonify(ok=False, error="الفاتورة غير موجودة"), 404
@@ -12267,8 +11566,6 @@ def api_sale_resume(sid):
 
 @app.route("/api/sales/held", methods=["GET"])
 def api_sales_held():
-    if session.get("cashier_mode") and not _cashier_permission_enabled("can_hold_sale"):
-        return jsonify(ok=False, error="لا يملك الكاشير صلاحية عرض الفواتير المعلّقة"), 403
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
@@ -12277,23 +11574,20 @@ def api_sales_held():
                   created_at, notes
            FROM sales_invoices
            WHERE company_id=? AND status=\x27draft\x27 AND is_held=1
-             AND (?=0 OR session_id=?)
            ORDER BY id DESC LIMIT 100""",
-        (company_id, 1 if session.get("cashier_mode") else 0,
-         g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1)
+        (company_id,)
     )
     return jsonify(ok=True, sales=rows)
 
 @app.route("/api/sales/<int:sid>/held", methods=["DELETE"])
-@require_cashier_permission("can_cancel_draft")
+@require_write
 def api_sale_held_delete(sid):
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
     s = db.query_one(
-        "SELECT id, status, is_held FROM sales_invoices WHERE id=? AND company_id=? AND (?=0 OR session_id=?)",
-        (sid, company_id, 1 if session.get("cashier_mode") else 0,
-         g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1)
+        "SELECT id, status, is_held FROM sales_invoices WHERE id=? AND company_id=?",
+        (sid, company_id)
     )
     if not s:
         return jsonify(ok=False, error="الفاتورة غير موجودة"), 404
@@ -12361,14 +11655,14 @@ def api_cashier_create():
         return jsonify(ok=False, error="لا توجد شركة"), 400
     d = request.get_json(silent=True) or {}
     username = (d.get("username") or "").strip().lower()
-    password = str(d.get("password") or "")
+    password = (d.get("password") or "").strip()
     full_name = (d.get("full_name") or "").strip()
     phone = (d.get("phone") or "").strip()
     permissions = d.get("permissions") or {}
     if not username or len(username) < 3:
         return jsonify(ok=False, error="اسم المستخدم 3 أحرف على الأقل"), 400
-    if not password:
-        return jsonify(ok=False, error="كلمة المرور مطلوبة"), 400
+    if not password or len(password) < 4:
+        return jsonify(ok=False, error="كلمة المرور 4 أحرف على الأقل"), 400
     if not full_name:
         return jsonify(ok=False, error="الاسم الكامل مطلوب"), 400
     existing = db.query_one(
@@ -12378,7 +11672,11 @@ def api_cashier_create():
     if existing:
         return jsonify(ok=False, error="اسم المستخدم موجود مسبقًا"), 400
     # دمج الصلاحيات الافتراضية مع المخصصة
-    perms = _normalize_cashier_permissions(permissions)
+    perms = dict(DEFAULT_CASHIER_PERMS)
+    if isinstance(permissions, dict):
+        for k, v in permissions.items():
+            if k in perms:
+                perms[k] = v
     pw_hash = generate_password_hash(password)
     try:
         cid = db.execute(
@@ -12401,20 +11699,15 @@ def api_cashier_update(cid):
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
-    c = db.query_one("SELECT id, permissions_json FROM cashiers WHERE id=? AND company_id=?", (cid, company_id))
+    c = db.query_one("SELECT id FROM cashiers WHERE id=? AND company_id=?", (cid, company_id))
     if not c:
         return jsonify(ok=False, error="الكاشير غير موجود"), 404
     d = request.get_json(silent=True) or {}
     full_name = (d.get("full_name") or "").strip()
     phone = (d.get("phone") or "").strip()
     username = (d.get("username") or "").strip().lower()
-    password = str(d.get("password") or "")
-    permissions = d.get("permissions") if isinstance(d.get("permissions"), dict) else None
-    if permissions is None:
-        try:
-            permissions = json.loads(c.get("permissions_json") or "{}")
-        except (TypeError, ValueError):
-            permissions = {}
+    password = (d.get("password") or "").strip()
+    permissions = d.get("permissions") or {}
     if not full_name:
         return jsonify(ok=False, error="الاسم الكامل مطلوب"), 400
     if not username or len(username) < 3:
@@ -12425,8 +11718,14 @@ def api_cashier_update(cid):
     )
     if existing:
         return jsonify(ok=False, error="اسم المستخدم مستخدم من كاشير آخر"), 400
-    perms = _normalize_cashier_permissions(permissions)
+    perms = dict(DEFAULT_CASHIER_PERMS)
+    if isinstance(permissions, dict):
+        for k, v in permissions.items():
+            if k in perms:
+                perms[k] = v
     if password:
+        if len(password) < 4:
+            return jsonify(ok=False, error="كلمة المرور 4 أحرف على الأقل"), 400
         pw_hash = generate_password_hash(password)
         db.execute(
             "UPDATE cashiers SET username=?, password_hash=?, full_name=?, phone=?, permissions_json=?, updated_at=datetime(\x27now\x27,\x27localtime\x27) WHERE id=?",
@@ -12467,9 +11766,9 @@ def api_cashier_reset_pw(cid):
     if not c:
         return jsonify(ok=False, error="الكاشير غير موجود"), 404
     d = request.get_json(silent=True) or {}
-    password = str(d.get("password") or "")
-    if not password:
-        return jsonify(ok=False, error="كلمة المرور مطلوبة"), 400
+    password = (d.get("password") or "").strip()
+    if not password or len(password) < 4:
+        return jsonify(ok=False, error="كلمة المرور 4 أحرف على الأقل"), 400
     pw_hash = generate_password_hash(password)
     db.execute(
         "UPDATE cashiers SET password_hash=?, updated_at=datetime(\x27now\x27,\x27localtime\x27) WHERE id=?",
@@ -12484,7 +11783,7 @@ def api_cashier_login():
         return jsonify(ok=False, error="لا توجد شركة"), 400
     d = request.get_json(silent=True) or {}
     username = (d.get("username") or "").strip().lower()
-    password = str(d.get("password") or "")
+    password = (d.get("password") or "").strip()
     if not username or not password:
         return jsonify(ok=False, error="اسم المستخدم وكلمة المرور مطلوبان"), 400
     cashier = db.query_one(
@@ -12497,22 +11796,13 @@ def api_cashier_login():
         return jsonify(ok=False, error="هذا الحساب معطّل"), 401
     if not check_password_hash(cashier["password_hash"], password):
         return jsonify(ok=False, error="كلمة المرور غير صحيحة"), 401
-    if session.get("cashier_mode") and session.get("cashier_session_id"):
-        return jsonify(ok=False, error="أغلق الوردية الحالية قبل التبديل إلى كاشير آخر"), 409
-    session["cashier_mode"] = True
-    session["cashier_pending_id"] = int(cashier["id"])
-    session["cashier_user_id"] = int(g.user["id"])
-    session["cashier_company_id"] = int(company_id)
-    session.pop("cashier_id", None)
-    session.pop("cashier_session_id", None)
-    session.permanent = True
     return jsonify(
         ok=True,
         cashier={
             "id": cashier["id"],
             "username": cashier["username"],
             "full_name": cashier["full_name"],
-            "permissions": _normalize_cashier_permissions(cashier["permissions_json"])
+            "permissions": cashier["permissions_json"]
         }
     )
 
@@ -12738,495 +12028,6 @@ def api_pos_inventory_restock():
 
 
 
-def _ensure_pos_purchase_return_tables(conn):
-    """جداول مستقلة لمرتجعات الشراء الصادرة من مخزن الكاشير POS."""
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS purchase_returns (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
-            purchase_id INTEGER NOT NULL REFERENCES purchase_invoices(id) ON DELETE RESTRICT,
-            supplier_id INTEGER NOT NULL REFERENCES business_partners(id) ON DELETE RESTRICT,
-            warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
-            return_no TEXT NOT NULL,
-            return_date TEXT NOT NULL,
-            reason TEXT NOT NULL DEFAULT '',
-            net_amount REAL NOT NULL DEFAULT 0,
-            tax_amount REAL NOT NULL DEFAULT 0,
-            total_amount REAL NOT NULL DEFAULT 0,
-            currency_id INTEGER NOT NULL REFERENCES currencies(id) ON DELETE RESTRICT,
-            exchange_rate REAL NOT NULL DEFAULT 1,
-            journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE RESTRICT,
-            request_id TEXT NOT NULL,
-            request_payload_json TEXT NOT NULL,
-            response_json TEXT NOT NULL DEFAULT '{}',
-            created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            UNIQUE(company_id, return_no),
-            UNIQUE(company_id, created_by, request_id)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS purchase_return_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            return_id INTEGER NOT NULL REFERENCES purchase_returns(id) ON DELETE CASCADE,
-            purchase_item_id INTEGER NOT NULL REFERENCES purchase_invoice_items(id) ON DELETE RESTRICT,
-            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
-            quantity REAL NOT NULL CHECK(quantity > 0),
-            unit_price REAL NOT NULL DEFAULT 0,
-            discount_amount REAL NOT NULL DEFAULT 0,
-            net_amount REAL NOT NULL DEFAULT 0,
-            tax_rate REAL NOT NULL DEFAULT 0,
-            tax_amount REAL NOT NULL DEFAULT 0,
-            total_amount REAL NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            UNIQUE(return_id, purchase_item_id)
-        )
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_purchase_return_items_purchase_item ON purchase_return_items(purchase_item_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_purchase_returns_purchase ON purchase_returns(purchase_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_purchase_returns_supplier ON purchase_returns(supplier_id)")
-
-
-@app.route("/api/pos-inventory/purchase-return-options/<int:product_id>", methods=["GET"])
-def api_pos_purchase_return_options(product_id):
-    """الفواتير المعتمدة التي يمكن إرجاع الصنف منها إلى المورد."""
-    company_id = _current_company_id()
-    if not company_id:
-        return jsonify(ok=False, error="لا توجد شركة حالية"), 400
-
-    conn = db.connect()
-    try:
-        _ensure_pos_purchase_return_tables(conn)
-        conn.commit()
-        product = conn.execute("""
-            SELECT id, code, name, is_active, is_stock_item, allow_decimal_qty
-            FROM products WHERE id=? AND company_id=?
-        """, (product_id, company_id)).fetchone()
-        if not product or not product["is_active"] or not product["is_stock_item"]:
-            return jsonify(ok=False, error="الصنف غير موجود أو غير مخزني"), 404
-
-        pos_warehouse = conn.execute("""
-            SELECT id, name FROM warehouses
-            WHERE id=3 AND company_id=? AND is_active=1
-        """, (company_id,)).fetchone()
-        if not pos_warehouse:
-            return jsonify(ok=False, error="مخزن الكاشير POS (رقم 3) غير موجود أو غير نشط"), 400
-
-        stock = conn.execute("""
-            SELECT quantity FROM warehouse_stock
-            WHERE company_id=? AND warehouse_id=3 AND product_id=?
-        """, (company_id, product_id)).fetchone()
-        pos_stock_qty = float(stock["quantity"] or 0) if stock else 0.0
-
-        rows = conn.execute("""
-            SELECT
-                pii.id AS purchase_item_id,
-                pi.id AS purchase_id,
-                pi.invoice_no,
-                pi.supplier_invoice_no,
-                pi.invoice_date,
-                pi.currency_id,
-                pi.exchange_rate,
-                bp.id AS supplier_id,
-                bp.name AS supplier_name,
-                pii.quantity AS original_qty,
-                pii.unit_price,
-                pii.discount,
-                pii.tax_rate,
-                pii.tax_amount,
-                pii.line_total,
-                u.name AS unit_name,
-                u.decimal_places AS unit_decimal_places,
-                p.allow_decimal_qty,
-                c.symbol AS currency_symbol,
-                COALESCE((SELECT SUM(pri.quantity) FROM purchase_return_items pri WHERE pri.purchase_item_id=pii.id),0) AS returned_qty
-            FROM purchase_invoice_items pii
-            JOIN purchase_invoices pi ON pi.id=pii.invoice_id AND pi.company_id=? AND pi.status='approved'
-            JOIN business_partners bp ON bp.id=pi.supplier_id AND bp.company_id=pi.company_id
-            JOIN products p ON p.id=pii.product_id AND p.company_id=pi.company_id
-            JOIN units u ON u.id=pii.unit_id
-            LEFT JOIN currencies c ON c.id=pi.currency_id
-            WHERE pii.product_id=? AND bp.partner_type IN ('supplier','both') AND bp.is_active=1
-            ORDER BY pi.invoice_date DESC, pi.id DESC, pii.id DESC
-        """, (company_id, product_id)).fetchall()
-
-        options = []
-        for row in rows:
-            item = dict(row)
-            original_qty = float(item.get("original_qty") or 0)
-            returned_qty = float(item.get("returned_qty") or 0)
-            remaining_qty = max(0.0, round(original_qty - returned_qty, 6))
-            max_qty = max(0.0, min(remaining_qty, pos_stock_qty))
-            decimal_places = max(0, int(item.get("unit_decimal_places") or 0))
-            if not item.get("allow_decimal_qty") or decimal_places == 0:
-                max_qty = float(int(max_qty + 0.000001))
-            else:
-                max_qty = round(max_qty, decimal_places)
-            if remaining_qty <= 0.000001 or max_qty <= 0.000001:
-                continue
-            item["returned_qty"] = round(returned_qty, 6)
-            item["remaining_qty"] = remaining_qty
-            item["max_return_qty"] = round(max_qty, 6)
-            options.append(item)
-
-        return jsonify(
-            ok=True,
-            product={"id": product["id"], "code": product["code"], "name": product["name"]},
-            warehouse_name=pos_warehouse["name"],
-            pos_stock_qty=round(pos_stock_qty, 6),
-            options=options
-        )
-    except Exception:
-        app.logger.exception("POS purchase return options failed")
-        return jsonify(ok=False, error="تعذر تحميل فواتير الشراء المرتبطة بالصنف"), 500
-    finally:
-        conn.close()
-
-
-@app.route("/api/pos-inventory/purchase-return", methods=["POST"])
-def api_pos_purchase_return():
-    """مرتجع شراء للمورد: تخفيض مخزون POS وإثبات رصيد دائن للشركة على المورد."""
-    if g.user.get("role") not in ("admin", "accountant", "cashier"):
-        return jsonify(ok=False, error="صلاحيتك لا تسمح بتسجيل مرتجع شراء"), 403
-
-    company_id = _current_company_id()
-    if not company_id:
-        return jsonify(ok=False, error="لا توجد شركة حالية"), 400
-
-    data = request.get_json(silent=True) or {}
-    try:
-        purchase_item_id = int(data.get("purchase_item_id", 0))
-        quantity = float(data.get("quantity", 0))
-    except (TypeError, ValueError, OverflowError):
-        return jsonify(ok=False, error="بيانات بند الشراء أو الكمية غير صالحة"), 400
-
-    if purchase_item_id <= 0 or not math.isfinite(quantity) or quantity <= 0:
-        return jsonify(ok=False, error="أدخل بند شراء وكمية صحيحة أكبر من صفر"), 400
-
-    request_id = str(data.get("request_id") or "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9_-]{16,100}", request_id):
-        return jsonify(ok=False, error="معرّف طلب المرتجع غير صالح؛ أعد تحميل الصفحة"), 400
-    reason = str(data.get("reason") or "مرتجع شراء من مخزن الكاشير POS").strip()[:250]
-    payload_json = json.dumps({
-        "purchase_item_id": purchase_item_id,
-        "quantity": round(quantity, 6),
-        "reason": reason
-    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-    conn = db.connect()
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-        _ensure_pos_purchase_return_tables(conn)
-
-        previous = conn.execute("""
-            SELECT request_payload_json, response_json
-            FROM purchase_returns
-            WHERE company_id=? AND created_by=? AND request_id=?
-        """, (company_id, g.user["id"], request_id)).fetchone()
-        if previous:
-            if previous["request_payload_json"] != payload_json:
-                conn.rollback()
-                return jsonify(ok=False, error="معرّف الطلب مستخدم لمرتجع مختلف؛ أعد المحاولة"), 409
-            response_data = json.loads(previous["response_json"] or "{}")
-            conn.commit()
-            return jsonify(**response_data)
-
-        item = conn.execute("""
-            SELECT
-                pii.*,
-                pi.company_id, pi.supplier_id, pi.warehouse_id AS purchase_warehouse_id,
-                pi.invoice_no, pi.invoice_date, pi.status AS purchase_status,
-                pi.branch_id, pi.currency_id, pi.exchange_rate,
-                pi.remaining_amount AS invoice_remaining_amount,
-                bp.name AS supplier_name, bp.partner_type, bp.payable_account_id,
-                p.name AS product_name, p.code AS product_code,
-                p.is_active AS product_active, p.is_stock_item, p.allow_decimal_qty,
-                p.base_unit_id,
-                u.name AS unit_name, u.decimal_places AS unit_decimal_places,
-                c.symbol AS currency_symbol
-            FROM purchase_invoice_items pii
-            JOIN purchase_invoices pi ON pi.id=pii.invoice_id
-            JOIN business_partners bp ON bp.id=pi.supplier_id AND bp.company_id=pi.company_id
-            JOIN products p ON p.id=pii.product_id AND p.company_id=pi.company_id
-            JOIN units u ON u.id=pii.unit_id
-            LEFT JOIN currencies c ON c.id=pi.currency_id
-            WHERE pii.id=? AND pi.company_id=?
-        """, (purchase_item_id, company_id)).fetchone()
-        if not item or item["purchase_status"] != "approved":
-            conn.rollback()
-            return jsonify(ok=False, error="بند فاتورة الشراء غير موجود أو أن الفاتورة غير معتمدة"), 404
-        if item["partner_type"] not in ("supplier", "both") or not item["payable_account_id"]:
-            conn.rollback()
-            return jsonify(ok=False, error="المورد غير مرتبط بحساب دائن صالح"), 400
-        if not item["product_active"] or not item["is_stock_item"]:
-            conn.rollback()
-            return jsonify(ok=False, error="الصنف غير نشط أو غير مخزني"), 400
-        if not item["allow_decimal_qty"] and abs(quantity - round(quantity)) > 0.000001:
-            conn.rollback()
-            return jsonify(ok=False, error="هذا الصنف لا يسمح بالكميات العشرية"), 400
-        decimal_places = max(0, int(item["unit_decimal_places"] or 0))
-        rounded_quantity = round(quantity, decimal_places)
-        if abs(quantity - rounded_quantity) > 0.000001:
-            conn.rollback()
-            return jsonify(ok=False, error=f"الكمية لا تتوافق مع دقة الوحدة ({decimal_places} خانة عشرية)"), 400
-
-        original_qty = float(item["quantity"] or 0)
-        if original_qty <= 0:
-            conn.rollback()
-            return jsonify(ok=False, error="كمية بند الشراء الأصلية غير صالحة"), 400
-
-        already = conn.execute("""
-            SELECT
-                COALESCE(SUM(quantity),0) AS returned_qty,
-                COALESCE(SUM(discount_amount),0) AS returned_discount,
-                COALESCE(SUM(net_amount),0) AS returned_net,
-                COALESCE(SUM(tax_amount),0) AS returned_tax,
-                COALESCE(SUM(total_amount),0) AS returned_total
-            FROM purchase_return_items
-            WHERE purchase_item_id=?
-        """, (purchase_item_id,)).fetchone()
-        returned_qty = float(already["returned_qty"] or 0)
-        remaining_qty = max(0.0, round(original_qty - returned_qty, 6))
-        if quantity > remaining_qty + 0.000001:
-            conn.rollback()
-            return jsonify(ok=False, error=f"الكمية المتبقية للإرجاع من فاتورة الشراء هي {remaining_qty:g}"), 400
-
-        pos_warehouse_id = 3
-        pos_warehouse = conn.execute("""
-            SELECT id, name FROM warehouses
-            WHERE id=? AND company_id=? AND is_active=1
-        """, (pos_warehouse_id, company_id)).fetchone()
-        if not pos_warehouse:
-            conn.rollback()
-            return jsonify(ok=False, error="مخزن الكاشير POS (رقم 3) غير موجود أو غير نشط"), 400
-        stock = conn.execute("""
-            SELECT id, quantity FROM warehouse_stock
-            WHERE company_id=? AND warehouse_id=? AND product_id=?
-        """, (company_id, pos_warehouse_id, item["product_id"])).fetchone()
-        stock_qty = float(stock["quantity"] or 0) if stock else 0.0
-        if not stock or quantity > stock_qty + 0.000001:
-            conn.rollback()
-            return jsonify(ok=False, error=f"الكمية المتاحة في مخزن الكاشير POS هي {max(0.0, stock_qty):g}"), 400
-
-        original_tax = float(item["tax_amount"] or 0)
-        original_total = float(item["line_total"] or 0)
-        original_discount = float(item["discount"] or 0)
-        unit_price = float(item["unit_price"] or 0)
-        if original_total <= 0:
-            gross = round(original_qty * unit_price, 2)
-            original_net = round(max(0.0, gross - original_discount), 2)
-            original_tax = round(original_net * float(item["tax_rate"] or 0) / 100, 2)
-            original_total = round(original_net + original_tax, 2)
-        else:
-            original_net = round(max(0.0, original_total - original_tax), 2)
-
-        if quantity >= remaining_qty - 0.000001:
-            return_discount = max(0.0, round(original_discount - float(already["returned_discount"] or 0), 2))
-            return_net = max(0.0, round(original_net - float(already["returned_net"] or 0), 2))
-            return_tax = max(0.0, round(original_tax - float(already["returned_tax"] or 0), 2))
-        else:
-            ratio = quantity / original_qty
-            return_discount = min(
-                max(0.0, round(original_discount - float(already["returned_discount"] or 0), 2)),
-                max(0.0, round(original_discount * ratio, 2))
-            )
-            return_net = min(
-                max(0.0, round(original_net - float(already["returned_net"] or 0), 2)),
-                max(0.0, round(original_net * ratio, 2))
-            )
-            return_tax = min(
-                max(0.0, round(original_tax - float(already["returned_tax"] or 0), 2)),
-                max(0.0, round(original_tax * ratio, 2))
-            )
-        return_total = round(return_net + return_tax, 2)
-        if return_total <= 0 or return_net < 0 or return_tax < 0:
-            conn.rollback()
-            return jsonify(ok=False, error="قيمة بند الشراء لا تسمح بإنشاء مرتجع مالي صالح"), 400
-
-        supplier_account = conn.execute("""
-            SELECT id FROM accounts
-            WHERE id=? AND company_id=? AND is_active=1
-        """, (item["payable_account_id"], company_id)).fetchone()
-        inventory_account = conn.execute("""
-            SELECT id FROM accounts
-            WHERE company_id=? AND acc_no='1301' AND is_active=1
-            ORDER BY id LIMIT 1
-        """, (company_id,)).fetchone()
-        vat_account = conn.execute("""
-            SELECT id FROM accounts
-            WHERE company_id=? AND acc_no='1202' AND is_active=1
-            ORDER BY id LIMIT 1
-        """, (company_id,)).fetchone()
-        if not supplier_account or not inventory_account:
-            conn.rollback()
-            return jsonify(ok=False, error="حساب المورد أو المخزون غير موجود أو غير نشط"), 400
-        if return_tax > 0.000001 and not vat_account:
-            conn.rollback()
-            return jsonify(ok=False, error="حساب ضريبة المشتريات 1202 غير موجود أو غير نشط"), 400
-
-        return_date = datetime.now().strftime("%Y-%m-%d")
-        period = _period_for_date(return_date, company_id)
-        if not period:
-            conn.rollback()
-            return jsonify(ok=False, error="لا توجد فترة محاسبية مفتوحة لتاريخ مرتجع الشراء"), 400
-        period_error = _open_period_error(return_date, company_id)
-        if period_error:
-            conn.rollback()
-            return jsonify(ok=False, error=period_error), 400
-
-        branch_id = item["branch_id"]
-        if not branch_id:
-            branch = conn.execute("""
-                SELECT id FROM branches WHERE company_id=? ORDER BY id LIMIT 1
-            """, (company_id,)).fetchone()
-            branch_id = branch["id"] if branch else None
-        if not branch_id:
-            conn.rollback()
-            return jsonify(ok=False, error="لا يوجد فرع للشركة الحالية"), 400
-
-        movement_no_value = 0
-        for row in conn.execute("SELECT movement_no FROM journal_entries").fetchall():
-            try:
-                movement_no_value = max(movement_no_value, int(float(str(row["movement_no"]).replace(",", ""))))
-            except (TypeError, ValueError):
-                continue
-        movement_no = str(movement_no_value + 1)
-        while conn.execute("SELECT 1 FROM journal_entries WHERE movement_no=?", (movement_no,)).fetchone():
-            movement_no = str(int(movement_no) + 1)
-
-        return_cursor = conn.execute("""
-            INSERT INTO purchase_returns
-                (company_id, purchase_id, supplier_id, warehouse_id,
-                 return_no, return_date, reason, net_amount, tax_amount,
-                 total_amount, currency_id, exchange_rate, request_id,
-                 request_payload_json, created_by)
-            VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            company_id, item["invoice_id"], item["supplier_id"], pos_warehouse_id,
-            return_date, reason, return_net, return_tax, return_total,
-            item["currency_id"], float(item["exchange_rate"] or 1), request_id,
-            payload_json, g.user["id"]
-        ))
-        return_id = return_cursor.lastrowid
-        return_no = f"PR-{return_date.replace('-', '')}-{return_id:06d}"
-
-        journal_cursor = conn.execute("""
-            INSERT INTO journal_entries
-                (movement_no, entry_date, description, region, status, entry_type,
-                 created_by, company_id, branch_id, fiscal_year_id, period_id,
-                 currency_id, exchange_rate)
-            VALUES (?, ?, ?, 'المركز الرئيسي', 'posted', 'عادي', ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            movement_no, return_date,
-            f"مرتجع شراء {return_no} - فاتورة {item['invoice_no']} - المورد {item['supplier_name']}",
-            g.user["id"], company_id, branch_id, period["fiscal_year_id"],
-            period["id"], item["currency_id"], float(item["exchange_rate"] or 1)
-        ))
-        journal_entry_id = journal_cursor.lastrowid
-
-        # قيد مرتجع شراء: مدين المورد، دائن المخزون، ودائن ضريبة المدخلات.
-        conn.execute("""
-            INSERT INTO journal_lines (entry_id, account_id, partner_id, debit, credit)
-            VALUES (?, ?, ?, ?, 0)
-        """, (journal_entry_id, supplier_account["id"], item["supplier_id"], return_total))
-        if return_net > 0.000001:
-            conn.execute("""
-                INSERT INTO journal_lines (entry_id, account_id, partner_id, debit, credit)
-                VALUES (?, ?, NULL, 0, ?)
-            """, (journal_entry_id, inventory_account["id"], return_net))
-        if return_tax > 0.000001:
-            conn.execute("""
-                INSERT INTO journal_lines (entry_id, account_id, partner_id, debit, credit)
-                VALUES (?, ?, NULL, 0, ?)
-            """, (journal_entry_id, vat_account["id"], return_tax))
-
-        conn.execute("""
-            INSERT INTO purchase_return_items
-                (return_id, purchase_item_id, product_id, unit_id, quantity,
-                 unit_price, discount_amount, net_amount, tax_rate, tax_amount, total_amount)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            return_id, purchase_item_id, item["product_id"], item["unit_id"],
-            quantity, unit_price, return_discount, return_net,
-            float(item["tax_rate"] or 0), return_tax, return_total
-        ))
-
-        stock_update = conn.execute("""
-            UPDATE warehouse_stock
-            SET quantity=quantity-?, updated_at=datetime('now','localtime')
-            WHERE id=? AND company_id=? AND warehouse_id=? AND quantity>=?
-        """, (quantity, stock["id"], company_id, pos_warehouse_id, quantity))
-        if stock_update.rowcount != 1:
-            raise RuntimeError("تغير رصيد مخزن الكاشير أثناء تنفيذ المرتجع؛ لم يتم تثبيت العملية")
-
-        conn.execute("""
-            INSERT INTO stock_movements
-                (company_id, warehouse_id, product_id, unit_id, movement_type,
-                 quantity, reference_type, reference_id, movement_date, notes, created_by)
-            VALUES (?, ?, ?, ?, 'out', ?, 'purchase_return', ?, ?, ?, ?)
-        """, (
-            company_id, pos_warehouse_id, item["product_id"], item["unit_id"],
-            quantity, return_id, return_date,
-            f"مرتجع شراء {return_no} إلى المورد {item['supplier_name']} - فاتورة {item['invoice_no']}",
-            g.user["id"]
-        ))
-
-        # تخفيض المتبقي الظاهر على فاتورة الشراء، مع إبقاء أي رصيد دائن زائد في كشف حساب المورد.
-        old_remaining = max(0.0, float(item["invoice_remaining_amount"] or 0))
-        new_remaining = round(max(0.0, old_remaining - return_total), 2)
-        conn.execute("""
-            UPDATE purchase_invoices
-            SET remaining_amount=?, updated_at=datetime('now','localtime')
-            WHERE id=? AND company_id=?
-        """, (new_remaining, item["invoice_id"], company_id))
-
-        conn.execute("""
-            UPDATE purchase_returns
-            SET return_no=?, journal_entry_id=?
-            WHERE id=?
-        """, (return_no, journal_entry_id, return_id))
-
-        new_stock_qty = round(max(0.0, stock_qty - quantity), 6)
-        response_data = {
-            "ok": True,
-            "return_id": return_id,
-            "return_no": return_no,
-            "purchase_id": item["invoice_id"],
-            "invoice_no": item["invoice_no"],
-            "supplier_id": item["supplier_id"],
-            "supplier_name": item["supplier_name"],
-            "product_id": item["product_id"],
-            "product_name": item["product_name"],
-            "quantity": round(quantity, 6),
-            "total_amount": return_total,
-            "currency_symbol": item["currency_symbol"] or "",
-            "journal_entry_id": journal_entry_id,
-            "movement_no": movement_no,
-            "pos_stock_qty": new_stock_qty,
-            "message": f"تم تسجيل مرتجع الشراء {return_no} للمورد {item['supplier_name']} بقيمة {return_total:,.2f}، وتم خصم {quantity:g} من مخزن الكاشير"
-        }
-        conn.execute("UPDATE purchase_returns SET response_json=? WHERE id=?", (
-            json.dumps(response_data, ensure_ascii=False, separators=(",", ":")), return_id
-        ))
-        conn.execute("""
-            INSERT INTO audit_log(user, action, details)
-            VALUES (?, 'مرتجع شراء من مخزن POS', ?)
-        """, (
-            g.user["full_name"],
-            f"{return_no} - فاتورة {item['invoice_no']} - المورد {item['supplier_name']} - {item['product_name']} - كمية {quantity:g} - قيمة {return_total:.2f}"
-        ))
-
-        conn.commit()
-        return jsonify(**response_data), 201
-    except Exception:
-        conn.rollback()
-        app.logger.exception("POS purchase return failed")
-        return jsonify(ok=False, error="تعذر تسجيل مرتجع الشراء؛ تم التراجع عن العملية بالكامل"), 500
-    finally:
-        conn.close()
-
-
 @app.route("/api/pos/expense", methods=["POST"])
 def api_pos_expense():
     try:
@@ -13359,7 +12160,6 @@ def api_users_list():
 
 
 @app.route("/api/invoice-settings", methods=["POST"])
-@admin_required
 def api_invoice_settings():
     try:
         d = request.get_json()
@@ -13372,7 +12172,6 @@ def api_invoice_settings():
 
 
 @app.route("/api/general-settings", methods=["POST"])
-@admin_required
 def api_general_settings():
     try:
         d = request.get_json()
@@ -13414,7 +12213,6 @@ def api_settings_data():
 
 
 @app.route("/api/settings/warehouse/add", methods=["POST"])
-@admin_required
 def api_warehouse_add():
     try:
         d = request.get_json()
@@ -13431,7 +12229,6 @@ def api_warehouse_add():
 
 
 @app.route("/api/settings/currency/add", methods=["POST"])
-@admin_required
 def api_currency_add():
     try:
         d = request.get_json()
@@ -13445,7 +12242,6 @@ def api_currency_add():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/activity/add", methods=["POST"])
-@admin_required
 def api_activity_add():
     try:
         d = request.get_json()
@@ -13486,7 +12282,6 @@ def api_tax_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/tax", methods=["POST"])
-@admin_required
 def api_tax_post():
     try:
         d = request.get_json()
@@ -13509,7 +12304,6 @@ def api_permissions_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/permissions", methods=["POST"])
-@admin_required
 def api_permissions_post():
     try:
         import json
@@ -13530,7 +12324,6 @@ def api_signatures_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/signatures", methods=["POST"])
-@admin_required
 def api_signatures_post():
     try:
         d = request.get_json()
@@ -13549,7 +12342,6 @@ def api_regions_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/region/add", methods=["POST"])
-@admin_required
 def api_region_add():
     try:
         d = request.get_json()
@@ -13566,7 +12358,6 @@ def api_region_add():
 
 
 @app.route("/api/returns/search_invoice", methods=["GET"])
-@require_cashier_permission("can_sell")
 def api_returns_search_invoice():
     try:
         q = request.args.get("q", "").strip()
@@ -13615,11 +12406,9 @@ def api_returns_search_invoice():
                     WHERE company_id = ?
                       AND customer_id = ?
                       AND status = 'approved'
-                      AND (?=0 OR session_id=?)
                     ORDER BY id DESC
                     LIMIT 20
-                """, (company_id, customer_data["id"], 1 if session.get("cashier_mode") else 0,
-                      g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1))
+                """, (company_id, customer_data["id"]))
 
                 for invoice in invoices:
                     inv = dict(invoice)
@@ -13652,10 +12441,8 @@ def api_returns_search_invoice():
             WHERE s.invoice_no = ?
               AND s.company_id = ?
               AND s.status = 'approved'
-              AND (?=0 OR s.session_id=?)
             LIMIT 1
-        """, (q, company_id, 1 if session.get("cashier_mode") else 0,
-              g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1))
+        """, (q, company_id))
 
         if not sale:
             return jsonify(
@@ -13700,7 +12487,7 @@ def api_returns_search_invoice():
 
 
 @app.route("/api/returns/execute", methods=["POST"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_returns_execute():
     data = request.get_json(silent=True) or {}
     try:
@@ -13774,29 +12561,19 @@ def api_returns_execute():
             SELECT *
             FROM sales_invoices
             WHERE id=? AND company_id=? AND status='approved'
-              AND (?=0 OR session_id=?)
-        """, (sale_id, company_id, 1 if session.get("cashier_mode") else 0,
-              g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1)).fetchone()
+        """, (sale_id, company_id)).fetchone()
         if not sale:
             conn.rollback()
             return jsonify(ok=False, error="الفاتورة غير موجودة أو غير معتمدة"), 404
 
         # المرحلة الأولى: رد نقدي من الصندوق بصرف النظر عن وسيلة دفع الفاتورة الأصلية.
-        if session.get("cashier_mode"):
-            current_session_id = g.cashier_session["id"] if getattr(g, "cashier_session", None) else None
-            session_row = conn.execute(
-                "SELECT id FROM cashier_sessions WHERE id=? AND company_id=? AND cashier_id=? AND user_id=? AND status='open'",
-                (current_session_id, company_id, g.cashier["id"], g.user["id"])
-            ).fetchone() if current_session_id else None
-        else:
-            session_row = conn.execute("""
-                SELECT id
-                FROM cashier_sessions
-                WHERE company_id=? AND user_id=? AND status='open'
-                ORDER BY id DESC LIMIT 1
-            """, (company_id, g.user["id"])).fetchone()
-        cashier_shift = session_row
-        if not cashier_shift:
+        session = conn.execute("""
+            SELECT id
+            FROM cashier_sessions
+            WHERE company_id=? AND user_id=? AND status='open'
+            ORDER BY id DESC LIMIT 1
+        """, (company_id, g.user["id"])).fetchone()
+        if not session:
             conn.rollback()
             return jsonify(ok=False, error="افتح وردية نقدية قبل تنفيذ المرتجع"), 400
 
@@ -13925,7 +12702,7 @@ def api_returns_execute():
                      refund_amount, session_id, reason, item_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (company_id, sale_id, item["product_id"], qty,
-                  refund, cashier_shift["id"], reason, entry["item_id"]))
+                  refund, session["id"], reason, entry["item_id"]))
             return_id = cur.lastrowid
             return_ids.append(return_id)
 
@@ -14058,11 +12835,9 @@ def api_delivery_update_status():
 
 
 @app.route("/api/delivery/drivers", methods=["GET"])
-@require_cashier_permission("can_sell")
 def api_delivery_drivers():
     try:
-        company_id = _current_company_id()
-        drivers = db.query("SELECT id, name, phone FROM delivery_drivers WHERE company_id=? AND is_active=1", (company_id,))
+        drivers = db.query("SELECT id, name, phone FROM delivery_drivers WHERE is_active=1")
         return jsonify(ok=True, drivers=drivers)
     except Exception as e:
         return jsonify(ok=False, error=str(e))
@@ -14081,11 +12856,9 @@ def api_delivery_driver_add():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/delivery/services", methods=["GET"])
-@require_cashier_permission("can_sell")
 def api_delivery_services():
     try:
-        company_id = _current_company_id()
-        services = db.query("SELECT id, name, price FROM delivery_services WHERE company_id=? AND is_active=1", (company_id,))
+        services = db.query("SELECT id, name, price FROM delivery_services WHERE is_active=1")
         return jsonify(ok=True, services=services)
     except Exception as e:
         return jsonify(ok=False, error=str(e))
@@ -14177,7 +12950,7 @@ def api_delivery_mark_delivered():
 
 
 @app.route("/api/sales/delivery/pending", methods=["GET"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sales_delivery_pending():
     conn = None
     try:
@@ -14194,12 +12967,10 @@ def api_sales_delivery_pending():
             JOIN sales_invoices si ON si.id=sd.sale_id AND si.company_id=sd.company_id
             LEFT JOIN business_partners bp ON bp.id=si.customer_id AND bp.company_id=si.company_id
             WHERE sd.company_id=? AND si.status='approved'
-              AND (?=0 OR si.session_id=?)
               AND (COALESCE(sd.delivery_status,'pending')!='delivered'
                    OR COALESCE(sd.collection_status,'pending')!='collected')
             ORDER BY sd.id DESC
-        """, (company_id, 1 if session.get("cashier_mode") else 0,
-              g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1)).fetchall()
+        """, (company_id,)).fetchall()
         return jsonify(ok=True, orders=[dict(row) for row in rows])
     except Exception as e:
         app.logger.exception("Failed to load pending delivery sales")
@@ -14209,7 +12980,7 @@ def api_sales_delivery_pending():
             conn.close()
 
 @app.route("/api/sales/<int:sale_id>/delivery/collect", methods=["POST"])
-@require_cashier_permission("can_sell")
+@require_write
 def api_sales_delivery_collect(sale_id):
     conn = None
     try:
@@ -14221,7 +12992,7 @@ def api_sales_delivery_collect(sale_id):
             return jsonify(ok=False, error="وسيلة الدفع غير صحيحة"), 400
         conn = db.connect()
         conn.execute("BEGIN IMMEDIATE")
-        sale = conn.execute("""SELECT si.*,bp.receivable_account_id FROM sales_invoices si LEFT JOIN business_partners bp ON bp.id=si.customer_id AND bp.company_id=si.company_id WHERE si.id=? AND si.company_id=? AND (?=0 OR si.session_id=?)""", (sale_id, company_id, 1 if session.get("cashier_mode") else 0, g.cashier_session["id"] if getattr(g, "cashier_session", None) else -1)).fetchone()
+        sale = conn.execute("""SELECT si.*,bp.receivable_account_id FROM sales_invoices si LEFT JOIN business_partners bp ON bp.id=si.customer_id AND bp.company_id=si.company_id WHERE si.id=? AND si.company_id=?""", (sale_id, company_id)).fetchone()
         if not sale:
             conn.rollback()
             return jsonify(ok=False, error="الفاتورة غير موجودة"), 404

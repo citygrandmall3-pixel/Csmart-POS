@@ -1305,8 +1305,9 @@ def init_db():
     delivery_cols = {r["name"] for r in conn.execute("PRAGMA table_info(sale_delivery_details)")}
     for col, definition in [("driver_id", "INTEGER"), ("region_id", "INTEGER"), ("region_name", "TEXT NOT NULL DEFAULT ''"), ("delivery_status", "TEXT NOT NULL DEFAULT 'pending'"), ("collection_status", "TEXT NOT NULL DEFAULT 'pending'"), ("receipt_entry_id", "INTEGER"), ("delivered_at", "TEXT"), ("collected_at", "TEXT"), ("collection_method", "TEXT NOT NULL DEFAULT ''")]:
         if col not in delivery_cols:
-            conn.execute("ALTER TABLE sale_delivery_details ADD COLUMN " + col + " " + definition)
+            conn.execute(f"ALTER TABLE sale_delivery_details ADD COLUMN {col} {definition}")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sale_delivery_receipt ON sale_delivery_details(receipt_entry_id) WHERE receipt_entry_id IS NOT NULL")
+
     conn.commit()
     conn.close()
     load_regions()
@@ -1424,25 +1425,32 @@ def audit(user, action, details=""):
 # النسخ الاحتياطي
 # ------------------------------------------------------------------
 
+
 _last_auto_check = None
 
 
 def create_backup(prefix="manual"):
-    """ينشئ نسخة احتياطية آمنة من قاعدة البيانات ويرجع اسم الملف"""
+    if not re.fullmatch(r"(?:manual|pre-restore|auto-\d{4}-\d{2}-\d{2})", prefix):
+        raise ValueError("بادئة النسخة غير صالحة")
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime_now().strftime("%Y-%m-%d_%H%M%S")
-    dest = BACKUP_DIR / f"{prefix}-{ts}.db"
-    conn = connect()
+    dest = BACKUP_DIR / f"{prefix}-{datetime_now():%Y-%m-%d_%H%M%S_%f}.db"
+    source = connect()
+    target = sqlite3.connect(str(dest))
     try:
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    finally:
-        conn.close()
-    shutil.copy2(DB_PATH, dest)
+        source.backup(target)
+        if target.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise sqlite3.DatabaseError("النسخة الاحتياطية غير سليمة")
+    except Exception:
+        target.close()
+        source.close()
+        dest.unlink(missing_ok=True)
+        raise
+    target.close()
+    source.close()
     return dest.name
 
 
 def auto_monthly_backup():
-    """نسخة احتياطية أوتوماتيك أول ما يبدأ شهر جديد — تُفحص مرة واحدة يوميًا"""
     global _last_auto_check
     today = date.today()
     if _last_auto_check == today:
@@ -1450,44 +1458,59 @@ def auto_monthly_backup():
     _last_auto_check = today
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     marker = today.strftime("%Y-%m")
-    has_this_month = any(p.name.startswith(f"auto-{marker}") for p in BACKUP_DIR.glob("auto-*.db"))
-    if not has_this_month:
+    if not any(p.name.startswith(f"auto-{marker}") for p in BACKUP_DIR.glob("auto-*.db")):
         create_backup(prefix=f"auto-{today.isoformat()}")
-    # الاحتفاظ بأحدث 24 نسخة فقط (حسب وقت الإنشاء وليس ترتيب الأسماء)
-    all_backups = sorted(BACKUP_DIR.glob("*.db*"), key=lambda p: p.stat().st_mtime, reverse=True)
-    for old in all_backups[24:]:
+    automatic = sorted(BACKUP_DIR.glob("auto-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in automatic[24:]:
         try:
             old.unlink()
         except OSError:
             pass
 
 
-SAFE_BACKUP_NAME = re.compile(r"^(auto|manual)-[A-Za-z0-9_\-.]+\.db$")
+SAFE_BACKUP_NAME = re.compile(r"^(?:auto|manual|pre-restore)-[A-Za-z0-9_.-]+\.db$")
+
+
+def _check_backup_integrity(path):
+    conn = sqlite3.connect(str(path))
+    try:
+        result = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        if result != "ok":
+            raise ValueError(f"النسخة تالفة: {result}")
+    finally:
+        conn.close()
+
+
+def _apply_backup(path):
+    source = sqlite3.connect(str(path))
+    target = connect()
+    try:
+        source.backup(target)
+        result = target.execute("PRAGMA integrity_check").fetchone()[0]
+        if result != "ok":
+            raise sqlite3.DatabaseError(f"فشل فحص القاعدة بعد الاستعادة: {result}")
+    finally:
+        target.close()
+        source.close()
 
 
 def restore_backup(name):
-    """يستعيد نسخة احتياطية مقيدة بالاسم الآمن — يسوي نسخة أمان أولاً ثم يحل محل القاعدة"""
-    if not SAFE_BACKUP_NAME.match(name):
+    if not isinstance(name, str) or not SAFE_BACKUP_NAME.fullmatch(name):
         raise ValueError("اسم النسخة غير صالح")
     src = BACKUP_DIR / name
-    if not src.exists():
+    if not src.is_file():
         raise FileNotFoundError("النسخة غير موجودة")
+    _check_backup_integrity(src)
+    safe_name = create_backup(prefix="pre-restore")
+    safe_path = BACKUP_DIR / safe_name
     try:
-        safe_name = create_backup(prefix="pre-restore")
-    except Exception:
-        safe_name = None
-    conn = connect()
-    try:
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    finally:
-        conn.close()
-    if str(src).endswith('.gz'):
-        import gzip
-        with gzip.open(src, 'rb') as f_in:
-            with open(DB_PATH, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-    else:
-        shutil.copy2(src, DB_PATH)
+        _apply_backup(src)
+    except Exception as error:
+        try:
+            _apply_backup(safe_path)
+        except Exception as recovery_error:
+            raise RuntimeError(f"فشلت الاستعادة والرجوع لنسخة الأمان: {recovery_error}") from error
+        raise RuntimeError(f"فشلت الاستعادة؛ أُعيدت نسخة الأمان {safe_name}") from error
     return safe_name
 
 
@@ -1495,15 +1518,14 @@ def list_backups():
     if not BACKUP_DIR.exists():
         return []
     out = []
-    for p in sorted(BACKUP_DIR.glob("*.db*"), reverse=True):
-        if SAFE_BACKUP_NAME.match(p.name):
+    for p in sorted(BACKUP_DIR.glob("*.db"), key=lambda x: x.stat().st_mtime, reverse=True):
+        if SAFE_BACKUP_NAME.fullmatch(p.name) and p.is_file():
             out.append({
                 "name": p.name,
                 "size": p.stat().st_size,
                 "modified": datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
             })
     return out
-
 
 if __name__ == "__main__":
     init_db()

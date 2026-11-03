@@ -1,0 +1,5 @@
+.k-summary-left { border: 4px solid #008000 !important; background: #fff !important; padding: 10px !important; }
+.k-summary-left::before { content: "💰 العمود الأيسر"; display: block; background: #008000; color: #fff; font-size: 14px; padding: 2px 5px; margin-bottom: 5px; text-align: center; }
+.k-summary-row { border: 1px solid #ff0000 !important; background: #f8f9fa !important; padding: 5px !important; margin-bottom: 5px !important; }
+.k-summary-left * { color: #000 !important; font-weight: bold !important; font-size: 14px !important; }
+.k-total { border: 2px solid #0000ff !important; background: #fff3cd !important; }

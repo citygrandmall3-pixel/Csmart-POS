@@ -1,0 +1,3095 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1>فواتير المشتريات</h1>
+        <p>إدارة فواتير شراء المواد والبضائع والمخزون</p>
+    </div>
+
+    <div>
+        <button type="button" onclick="showPurchaseForm()">
+            + فاتورة شراء جديدة
+        </button>
+    </div>
+</div>
+
+<!-- قائمة الفواتير -->
+<div id="purchasesListCard" class="card">
+
+    <div class="card-header">
+        <h2>قائمة فواتير الشراء</h2>
+
+        <button type="button" onclick="loadPurchases()">
+            تحديث
+        </button>
+    </div>
+
+    <div id="listMessage"></div>
+
+    <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>رقم الفاتورة</th>
+                    <th>فاتورة المورد</th>
+                    <th>المورد</th>
+                    <th>التاريخ</th>
+                    <th>العملة</th>
+                    <th>طريقة الدفع</th>
+                    <th>الإجمالي</th>
+                    <th>المدفوع</th>
+                    <th>المتبقي</th>
+                    <th>الحالة</th>
+                    <th>إجراء</th>
+                </tr>
+            </thead>
+
+            <tbody id="purchasesBody">
+                <tr>
+                    <td colspan="11" style="text-align:center;">
+                        جاري تحميل البيانات...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+
+<!-- تفاصيل فاتورة الشراء -->
+<div id="purchaseDetailsCard" class="card" style="display:none;">
+
+    <div class="card-header">
+        <h2>تفاصيل فاتورة الشراء</h2>
+
+        <button
+            type="button"
+            id="purchaseHeaderEditButton"
+            onclick="showPurchaseHeaderEdit()"
+            style="display:none;">
+            تعديل بيانات الفاتورة
+        </button>
+
+        <button
+            type="button"
+            id="purchaseApproveButton"
+            onclick="approvePurchase()"
+            style="display:none;">
+            اعتماد الفاتورة
+        </button>
+
+        <button type="button" onclick="hidePurchaseDetails()">
+            رجوع إلى القائمة
+        </button>
+    </div>
+
+    <div id="purchaseDetailsMessage"></div>
+
+    <!-- بيانات الفاتورة -->
+    <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+        gap:15px;
+        margin-bottom:20px;
+    ">
+
+        <div>
+            <strong>رقم الفاتورة</strong>
+            <div id="detailInvoiceNo">-</div>
+        </div>
+
+        <div>
+            <strong>فاتورة المورد</strong>
+            <div id="detailSupplierInvoiceNo">-</div>
+        </div>
+
+        <div>
+            <strong>المورد</strong>
+            <div id="detailSupplierName">-</div>
+        </div>
+
+        <div>
+            <strong>التاريخ</strong>
+            <div id="detailInvoiceDate">-</div>
+        </div>
+
+        <div>
+            <strong>المستودع</strong>
+            <div id="detailWarehouseName">-</div>
+        </div>
+
+        <div>
+            <strong>العملة</strong>
+            <div id="detailCurrencyName">-</div>
+        </div>
+
+        <div>
+            <strong>سعر الصرف</strong>
+            <div id="detailExchangeRate">-</div>
+        </div>
+
+        <div>
+            <strong>طريقة الدفع</strong>
+            <div id="detailPaymentMethod">-</div>
+        </div>
+
+        <div>
+            <strong>الحالة</strong>
+            <div id="detailStatus">-</div>
+        </div>
+
+    </div>
+
+
+    <!-- تعديل بيانات الفاتورة -->
+    <div
+        id="purchaseHeaderEditSection"
+        style="
+            display:none;
+            margin-bottom:20px;
+            padding:15px;
+            border:1px solid #ddd;
+            border-radius:8px;
+        ">
+
+        <h3>تعديل بيانات فاتورة الشراء</h3>
+
+        <div style="
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+            gap:15px;
+        ">
+
+            <div>
+                <label>المورد</label>
+                <select id="purchase_edit_supplier_id">
+                    <option value="">اختر المورد</option>
+                </select>
+            </div>
+
+            <div>
+                <label>فاتورة المورد</label>
+                <input
+                    type="text"
+                    id="purchase_edit_supplier_invoice_no">
+            </div>
+
+            <div>
+                <label>تاريخ الفاتورة</label>
+                <input
+                    type="date"
+                    id="purchase_edit_invoice_date">
+            </div>
+
+            <div>
+                <label>المستودع</label>
+                <select id="purchase_edit_warehouse_id">
+                    <option value="">بدون مستودع</option>
+                </select>
+            </div>
+
+            <div>
+                <label>العملة</label>
+                <select id="purchase_edit_currency_id">
+                    <option value="">اختر العملة</option>
+                </select>
+            </div>
+
+            <div>
+                <label>سعر الصرف</label>
+                <input
+                    type="number"
+                    id="purchase_edit_exchange_rate"
+                    min="0.000001"
+                    step="0.000001">
+            </div>
+
+            <div>
+                <label>طريقة الدفع</label>
+                <select id="purchase_edit_payment_method">
+                    <option value="credit">آجل</option>
+                    <option value="cash">نقدي</option>
+                    <option value="bank_ahly">شام كاش</option>
+                    <option value="bank_misr">ماستر كارد</option>
+                </select>
+            </div>
+
+            <div style="grid-column:1/-1;">
+                <label>ملاحظات</label>
+                <textarea
+                    id="purchase_edit_notes"
+                    rows="3"></textarea>
+            </div>
+
+        </div>
+
+        <div style="margin-top:15px;">
+
+            <button
+                type="button"
+                onclick="savePurchaseHeaderEdit()">
+                حفظ بيانات الفاتورة
+            </button>
+
+            <button
+                type="button"
+                onclick="cancelPurchaseHeaderEdit()">
+                إلغاء
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- إضافة / تعديل صنف -->
+    <div id="purchaseItemFormSection">
+
+        <input
+            type="hidden"
+            id="purchase_edit_item_id"
+            value="">
+
+        <h3>إضافة صنف إلى الفاتورة</h3>
+
+        <div style="
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+            gap:15px;
+            align-items:end;
+        ">
+
+            <div>
+                <label for="purchase_product_id">
+                    الصنف
+                </label>
+
+                <select id="purchase_product_id">
+                    <option value="">اختر الصنف</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="purchase_quantity">
+                    الكمية
+                </label>
+
+                <input
+                    type="number"
+                    id="purchase_quantity"
+                    min="0.000001"
+                    step="any"
+                    value="1">
+            </div>
+
+            <div>
+                <label for="purchase_unit_price">
+                    سعر الوحدة
+                </label>
+
+                <input
+                    type="number"
+                    id="purchase_unit_price"
+                    min="0"
+                    step="any"
+                    value="0">
+            </div>
+
+            <div>
+                <label for="purchase_discount">
+                    الخصم
+                </label>
+
+                <input
+                    type="number"
+                    id="purchase_discount"
+                    min="0"
+                    step="any"
+                    value="0">
+            </div>
+
+            <div>
+                <label for="purchase_tax_rate">
+                    الضريبة %
+                </label>
+
+                <input
+                    type="number"
+                    id="purchase_tax_rate"
+                    min="0"
+                    step="any"
+                    value="0">
+            </div>
+
+            <div>
+                <button
+                    type="button"
+                    id="purchaseItemSaveButton"
+                    onclick="savePurchaseItem()">
+                    + إضافة الصنف
+                </button>
+
+                <button
+                    type="button"
+                    id="purchaseItemCancelEditButton"
+                    onclick="cancelPurchaseItemEdit()"
+                    style="display:none;">
+                    إلغاء التعديل
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- أصناف الفاتورة -->
+    <div style="overflow-x:auto; margin-top:20px;">
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>كود الصنف</th>
+                    <th>الصنف</th>
+                    <th>الوحدة</th>
+                    <th>الكمية</th>
+                    <th>سعر الوحدة</th>
+                    <th>الخصم</th>
+                    <th>الضريبة</th>
+                    <th>الإجمالي</th>
+                    <th>إجراء</th>
+                </tr>
+            </thead>
+
+            <tbody id="purchaseItemsBody">
+
+                <tr>
+                    <td colspan="10" style="text-align:center;">
+                        لا توجد أصناف
+                    </td>
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <!-- الإجماليات -->
+    <div style="
+        margin-top:20px;
+        display:flex;
+        justify-content:flex-start;
+    ">
+
+        <div style="
+            min-width:300px;
+            max-width:450px;
+            width:100%;
+        ">
+
+            <div>
+                الإجمالي قبل الخصم:
+                <strong id="detailSubtotal">0.00</strong>
+            </div>
+
+            <div>
+                إجمالي الخصم:
+                <strong id="detailDiscountTotal">0.00</strong>
+            </div>
+
+            <div>
+                إجمالي الضريبة:
+                <strong id="detailTaxTotal">0.00</strong>
+            </div>
+
+            <div style="font-size:1.2em; margin-top:8px;">
+                الإجمالي النهائي:
+                <strong id="detailGrandTotal">0.00</strong>
+            </div>
+
+            <div>
+                المدفوع:
+                <strong id="detailPaidAmount">0.00</strong>
+            </div>
+
+            <div>
+                المتبقي:
+                <strong id="detailRemainingAmount">0.00</strong>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div style="margin-top:20px;">
+
+        <strong>ملاحظات</strong>
+
+        <div id="detailNotes">-</div>
+
+    </div>
+
+</div>
+
+
+
+<!-- نموذج فاتورة الشراء -->
+<div id="purchaseFormCard" class="card" style="display:none;">
+
+    <div class="card-header">
+        <h2 id="purchaseFormTitle">فاتورة شراء جديدة</h2>
+
+        <button type="button" onclick="hidePurchaseForm()">
+            إلغاء
+        </button>
+    </div>
+
+
+    <div id="formMessage"></div>
+
+
+    <form id="purchaseForm">
+
+        <div style="
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+            gap:15px;
+        ">
+
+            <!-- المورد -->
+            <div>
+                <label for="supplier_id">المورد</label>
+
+                <select id="supplier_id" required>
+                    <option value="">اختر المورد</option>
+                </select>
+            </div>
+
+
+            <!-- رقم فاتورة المورد -->
+            <div>
+                <label for="supplier_invoice_no">
+                    رقم فاتورة المورد
+                </label>
+
+                <input
+                    type="text"
+                    id="supplier_invoice_no"
+                    placeholder="رقم فاتورة المورد">
+            </div>
+
+
+            <!-- تاريخ الفاتورة -->
+            <div>
+                <label for="invoice_date">
+                    تاريخ الفاتورة
+                </label>
+
+                <input
+                    type="date"
+                    id="invoice_date"
+                    required>
+            </div>
+
+
+            <!-- المستودع -->
+            <div>
+                <label for="warehouse_id">
+                    المستودع
+                </label>
+
+                <select id="warehouse_id">
+                    <option value="">بدون مستودع</option>
+                </select>
+
+                <small>
+                    سيصبح المستودع إلزاميًا عند اعتماد الفاتورة المخزنية.
+                </small>
+            </div>
+
+
+            <!-- العملة -->
+            <div>
+                <label for="currency_id">
+                    العملة
+                </label>
+
+                <select id="currency_id" required>
+                    <option value="">اختر العملة</option>
+                </select>
+            </div>
+
+
+            <!-- سعر الصرف -->
+            <div>
+                <label for="exchange_rate">
+                    سعر الصرف مقابل الدولار
+                </label>
+
+                <input
+                    type="number"
+                    id="exchange_rate"
+                    value="1"
+                    min="0.000001"
+                    step="any"
+                    required>
+            </div>
+
+
+            <!-- طريقة الدفع -->
+            <div>
+                <label for="payment_method">
+                    طريقة الدفع
+                </label>
+
+                <select id="payment_method" required>
+
+                    <option value="credit">
+                        آجل
+                    </option>
+
+                    <option value="cash">
+                        نقدي
+                    </option>
+
+                    <option value="bank_ahly">
+                        شام كاش
+                    </option>
+
+                    <option value="bank_misr">
+                        ماستر كارد
+                    </option>
+
+                </select>
+            </div>
+
+
+            <!-- الملاحظات -->
+            <div style="grid-column:1/-1;">
+                <label for="notes">
+                    ملاحظات
+                </label>
+
+                <textarea
+                    id="notes"
+                    rows="3"
+                    placeholder="ملاحظات الفاتورة"></textarea>
+            </div>
+
+        </div>
+
+
+        <div style="
+            margin-top:20px;
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+        ">
+
+            <button
+                type="submit"
+                id="savePurchaseButton">
+                حفظ كمسودة
+            </button>
+
+            <button
+                type="button"
+                onclick="hidePurchaseForm()">
+                إلغاء
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+
+<script>
+
+let suppliers = [];
+let currencies = [];
+let warehouses = [];
+
+
+function showPurchaseForm() {
+
+    document.getElementById("purchasesListCard").style.display = "none";
+    document.getElementById("purchaseFormCard").style.display = "block";
+
+    document.getElementById("purchaseFormTitle").textContent =
+        "فاتورة شراء جديدة";
+
+    document.getElementById("purchaseForm").reset();
+
+    document.getElementById("exchange_rate").value = "1";
+
+    document.getElementById("payment_method").value = "credit";
+
+    setTodayDate();
+
+    clearFormMessage();
+
+    loadPurchaseFormData();
+}
+
+
+function hidePurchaseForm() {
+
+    document.getElementById("purchaseFormCard").style.display = "none";
+    document.getElementById("purchasesListCard").style.display = "block";
+
+    clearFormMessage();
+
+    loadPurchases();
+}
+
+
+function setTodayDate() {
+
+    const input = document.getElementById("invoice_date");
+
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+
+    input.value = `${year}-${month}-${day}`;
+}
+
+
+function showFormMessage(text) {
+
+    document.getElementById("formMessage").innerHTML = `
+        <div style="
+            padding:10px;
+            margin:10px 0;
+            border-radius:6px;
+        ">
+            ${text}
+        </div>
+    `;
+}
+
+
+function clearFormMessage() {
+
+    document.getElementById("formMessage").innerHTML = "";
+}
+
+
+async function loadPurchaseFormData() {
+
+    try {
+
+        const [
+            partnersResponse,
+            warehousesResponse,
+            currenciesResponse
+        ] = await Promise.all([
+
+            fetch("/api/partners"),
+
+            fetch("/api/warehouses"),
+
+            fetch("/api/currencies")
+
+        ]);
+
+
+        const partnersData =
+            await partnersResponse.json();
+
+        const warehousesData =
+            await warehousesResponse.json();
+
+        const currenciesData =
+            await currenciesResponse.json();
+
+
+        if (!partnersResponse.ok) {
+            throw new Error(
+                partnersData.error ||
+                "تعذر تحميل الموردين"
+            );
+        }
+
+
+        if (!warehousesResponse.ok) {
+            throw new Error(
+                warehousesData.error ||
+                "تعذر تحميل المستودعات"
+            );
+        }
+
+
+        if (!currenciesResponse.ok) {
+            throw new Error(
+                currenciesData.error ||
+                "تعذر تحميل العملات"
+            );
+        }
+
+
+        suppliers =
+            (partnersData.partners || [])
+            .filter(p =>
+                p.partner_type === "supplier" &&
+                Number(p.is_active) === 1
+            );
+
+
+        warehouses =
+            (warehousesData.rows || [])
+            .filter(w =>
+                Number(w.is_active) === 1
+            );
+
+
+        currencies =
+            (currenciesData.rows || [])
+            .filter(c =>
+                Number(c.is_active) === 1
+            );
+
+
+        fillSupplierSelect();
+
+        fillWarehouseSelect();
+
+        fillCurrencySelect();
+
+
+    } catch (error) {
+
+        showFormMessage(
+            "حدث خطأ أثناء تحميل بيانات الفاتورة: " +
+            error.message
+        );
+
+    }
+
+}
+
+
+function fillSupplierSelect() {
+
+    const select =
+        document.getElementById("supplier_id");
+
+    select.innerHTML =
+        '<option value="">اختر المورد</option>';
+
+
+    suppliers.forEach(supplier => {
+
+        const option =
+            document.createElement("option");
+
+        option.value = supplier.id;
+
+        option.textContent =
+            `${supplier.code} - ${supplier.name}`;
+
+        select.appendChild(option);
+
+    });
+
+}
+
+
+function fillWarehouseSelect() {
+
+    const select =
+        document.getElementById("warehouse_id");
+
+    select.innerHTML =
+        '<option value="">بدون مستودع</option>';
+
+
+    warehouses.forEach(warehouse => {
+
+        const option =
+            document.createElement("option");
+
+        option.value = warehouse.id;
+
+        option.textContent =
+            `${warehouse.code} - ${warehouse.name}`;
+
+        select.appendChild(option);
+
+    });
+
+}
+
+
+function fillCurrencySelect() {
+
+    const select =
+        document.getElementById("currency_id");
+
+    select.innerHTML =
+        '<option value="">اختر العملة</option>';
+
+
+    currencies.forEach(currency => {
+
+        const option =
+            document.createElement("option");
+
+        option.value = currency.id;
+
+        option.textContent =
+            `${currency.code} - ${currency.name}`;
+
+        select.appendChild(option);
+
+    });
+
+
+    const baseCurrency =
+        currencies.find(c =>
+            Number(c.is_base) === 1
+        );
+
+
+    if (baseCurrency) {
+
+        select.value =
+            baseCurrency.id;
+
+        document.getElementById(
+            "exchange_rate"
+        ).value = "1";
+
+    }
+
+}
+
+
+document
+    .getElementById("purchaseForm")
+    .addEventListener(
+        "submit",
+        async function(event) {
+
+            event.preventDefault();
+
+            clearFormMessage();
+
+            const supplierId =
+                document.getElementById("supplier_id").value;
+
+            const currencyId =
+                document.getElementById("currency_id").value;
+
+            const invoiceDate =
+                document.getElementById("invoice_date").value;
+
+            const warehouseId =
+                document.getElementById("warehouse_id").value;
+
+            const exchangeRate =
+                document.getElementById("exchange_rate").value;
+
+            const paymentMethod =
+                document.getElementById("payment_method").value;
+
+            const supplierInvoiceNo =
+                document.getElementById("supplier_invoice_no").value.trim();
+
+            const notes =
+                document.getElementById("notes").value.trim();
+
+
+            if (!supplierId) {
+
+                showFormMessage(
+                    "يرجى اختيار المورد."
+                );
+
+                return;
+
+            }
+
+
+            if (!currencyId) {
+
+                showFormMessage(
+                    "يرجى اختيار العملة."
+                );
+
+                return;
+
+            }
+
+
+            if (!invoiceDate) {
+
+                showFormMessage(
+                    "يرجى تحديد تاريخ الفاتورة."
+                );
+
+                return;
+
+            }
+
+
+            if (!exchangeRate || Number(exchangeRate) <= 0) {
+
+                showFormMessage(
+                    "سعر الصرف يجب أن يكون أكبر من صفر."
+                );
+
+                return;
+
+            }
+
+
+            const payload = {
+                supplier_id: Number(supplierId),
+                supplier_invoice_no: supplierInvoiceNo,
+                invoice_date: invoiceDate,
+                warehouse_id: warehouseId
+                    ? Number(warehouseId)
+                    : null,
+                currency_id: Number(currencyId),
+                exchange_rate: Number(exchangeRate),
+                payment_method: paymentMethod,
+                notes: notes
+            };
+
+
+            try {
+
+                const response = await fetch(
+                    "/api/purchases",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(payload)
+                    }
+                );
+
+
+                const result =
+                    await response.json();
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        result.error ||
+                        "تعذر حفظ الفاتورة"
+                    );
+
+                }
+
+
+                showFormMessage(
+                    "تم حفظ الفاتورة كمسودة بنجاح. رقم الفاتورة: " +
+                    result.invoice_no,
+                    "success"
+                );
+
+
+                document
+                    .getElementById("purchaseForm")
+                    .reset();
+
+
+                setTodayDate();
+
+
+                await loadPurchaseFormData();
+                await loadPurchases();
+
+            } catch (error) {
+
+                showFormMessage(
+                    error.message ||
+                    "حدث خطأ أثناء حفظ الفاتورة"
+                );
+
+            }
+
+        }
+    );
+
+
+async function openPurchaseFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("open");
+
+    if (!id) return;
+
+    const purchaseId = Number(id);
+    if (!Number.isInteger(purchaseId) || purchaseId <= 0) return;
+
+    try {
+        await openPurchase(purchaseId);
+    } catch (e) {
+        console.error("فشل فتح فاتورة المشتريات من الرابط:", e);
+        showFormMessage(e.message || "فشل فتح الفاتورة");
+    }
+}
+
+async function loadPurchases() {
+
+    const body =
+        document.getElementById(
+            "purchasesBody"
+        );
+
+
+    body.innerHTML = `
+        <tr>
+            <td colspan="11" style="text-align:center;">
+                جاري تحميل البيانات...
+            </td>
+        </tr>
+    `;
+
+
+    try {
+
+        const response =
+            await fetch("/api/purchases");
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "تعذر تحميل فواتير الشراء"
+            );
+
+        }
+
+
+        const rows =
+            data.rows || [];
+
+
+        if (!rows.length) {
+
+            body.innerHTML = `
+                <tr>
+                    <td colspan="11"
+                        style="text-align:center;">
+                        لا توجد فواتير شراء
+                    </td>
+                </tr>
+            `;
+
+            return;
+
+        }
+
+
+        body.innerHTML =
+            rows.map(row => {
+
+                const supplierName =
+                    row.supplier_name ||
+                    row.supplier ||
+                    row.partner_name ||
+                    "";
+
+
+                const currencyName =
+                    row.currency_name ||
+                    row.currency_code ||
+                    "";
+
+
+                return `
+                    <tr>
+
+                        <td>
+                            ${row.invoice_no || ""}
+                        </td>
+
+                        <td>
+                            ${row.supplier_invoice_no || ""}
+                        </td>
+
+                        <td>
+                            ${supplierName}
+                        </td>
+
+                        <td>
+                            ${row.invoice_date || ""}
+                        </td>
+
+                        <td>
+                            ${currencyName}
+                        </td>
+
+                        <td>
+                            ${paymentMethodName(
+                                row.payment_method
+                            )}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.grand_total || 0
+                            ).toFixed(2)}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.paid_amount || 0
+                            ).toFixed(2)}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.remaining_amount || 0
+                            ).toFixed(2)}
+                        </td>
+
+                        <td>
+                            ${statusName(row.status)}
+                        </td>
+
+                        <td>
+                            <button
+                                type="button"
+                                onclick="openPurchase(${row.id})">
+                                فتح
+                            </button>
+                        </td>
+
+                    </tr>
+                `;
+
+            }).join("");
+
+
+    } catch (error) {
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="11"
+                    style="text-align:center;">
+                    حدث خطأ: ${error.message}
+                </td>
+            </tr>
+        `;
+
+    }
+
+}
+
+
+function paymentMethodName(value) {
+
+    const names = {
+
+        credit: "آجل",
+
+        cash: "نقدي",
+
+        bank_ahly: "شام كاش",
+
+        bank_misr: "ماستر كارد"
+
+    };
+
+
+    return names[value] ||
+           value ||
+           "";
+
+}
+
+
+function statusName(value) {
+
+    const names = {
+
+        draft: "مسودة",
+
+        approved: "معتمدة",
+
+        cancelled: "ملغاة"
+
+    };
+
+
+    return names[value] ||
+           value ||
+           "";
+
+}
+
+
+let currentPurchaseId = null;
+
+async function openPurchase(id) {
+    currentPurchaseId = id;
+
+    const detailsCard =
+        document.getElementById("purchaseDetailsCard");
+
+    const listCard =
+        document.getElementById("purchasesListCard");
+
+    const formCard =
+        document.getElementById("purchaseFormCard");
+
+    const message =
+        document.getElementById("purchaseDetailsMessage");
+
+
+    message.innerHTML = "";
+
+    detailsCard.style.display = "block";
+    listCard.style.display = "none";
+    formCard.style.display = "none";
+
+
+    message.innerHTML = `
+        <div>
+            جاري تحميل تفاصيل الفاتورة...
+        </div>
+    `;
+
+
+    try {
+
+        const response =
+            await fetch("/api/purchases");
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "تعذر تحميل الفواتير"
+            );
+
+        }
+
+
+        const invoice =
+            (data.rows || []).find(
+                row => Number(row.id) === Number(id)
+            );
+
+
+        if (!invoice) {
+
+            throw new Error(
+                "فاتورة الشراء غير موجودة"
+            );
+
+        }
+
+
+        document.getElementById(
+            "detailInvoiceNo"
+        ).textContent =
+            invoice.invoice_no || "-";
+
+
+        document.getElementById(
+            "detailSupplierInvoiceNo"
+        ).textContent =
+            invoice.supplier_invoice_no || "-";
+
+
+        document.getElementById(
+            "detailSupplierName"
+        ).textContent =
+            invoice.supplier_name || "-";
+
+
+        document.getElementById(
+            "detailInvoiceDate"
+        ).textContent =
+            invoice.invoice_date || "-";
+
+
+        document.getElementById(
+            "detailWarehouseName"
+        ).textContent =
+            invoice.warehouse_name || "بدون مستودع";
+
+
+        document.getElementById(
+            "detailCurrencyName"
+        ).textContent =
+            invoice.currency_name ||
+            invoice.currency_code ||
+            "-";
+
+
+        document.getElementById(
+            "detailExchangeRate"
+        ).textContent =
+            Number(
+                invoice.exchange_rate || 0
+            ).toFixed(6);
+
+
+        document.getElementById(
+            "detailPaymentMethod"
+        ).textContent =
+            paymentMethodName(
+                invoice.payment_method
+            );
+
+
+        document.getElementById(
+            "detailStatus"
+        ).textContent =
+            statusName(
+                invoice.status
+            );
+
+
+        document.getElementById(
+            "purchaseHeaderEditButton"
+        ).style.display =
+            invoice.status === "draft"
+                ? "inline-block"
+                : "none";
+
+        document.getElementById(
+            "purchaseApproveButton"
+        ).style.display =
+            invoice.status === "draft"
+                ? "inline-block"
+                : "none";
+
+
+        document.getElementById(
+            "detailSubtotal"
+        ).textContent =
+            Number(
+                invoice.subtotal || 0
+            ).toFixed(2);
+
+
+        document.getElementById(
+            "detailDiscountTotal"
+        ).textContent =
+            Number(
+                invoice.discount_total || 0
+            ).toFixed(2);
+
+
+        document.getElementById(
+            "detailTaxTotal"
+        ).textContent =
+            Number(
+                invoice.tax_total || 0
+            ).toFixed(2);
+
+
+        document.getElementById(
+            "detailGrandTotal"
+        ).textContent =
+            Number(
+                invoice.grand_total || 0
+            ).toFixed(2);
+
+
+        document.getElementById(
+            "detailPaidAmount"
+        ).textContent =
+            Number(
+                invoice.paid_amount || 0
+            ).toFixed(2);
+
+
+        document.getElementById(
+            "detailRemainingAmount"
+        ).textContent =
+            Number(
+                invoice.remaining_amount || 0
+            ).toFixed(2);
+
+
+        document.getElementById(
+            "detailNotes"
+        ).textContent =
+            invoice.notes || "-";
+
+
+        message.innerHTML = "";
+
+        await loadPurchaseProducts();
+
+        await loadPurchaseItems(id);
+
+    } catch (error) {
+
+        message.innerHTML = `
+            <div>
+                حدث خطأ: ${error.message}
+            </div>
+        `;
+
+    }
+
+}
+
+
+async function approvePurchase() {
+    if (!currentPurchaseId) {
+        alert("لم يتم فتح فاتورة للاعتماد");
+        return;
+    }
+
+    const invoiceNo =
+        document.getElementById(
+            "detailInvoiceNo"
+        ).textContent.trim();
+
+    const confirmed = confirm(
+        `هل تريد اعتماد فاتورة الشراء ${invoiceNo}؟\n\n` +
+        "سيتم إنشاء القيد المحاسبي وإضافة الكمية إلى المخزون، " +
+        "ولا يمكن تعديل الفاتورة بعد الاعتماد."
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const message =
+        document.getElementById(
+            "purchaseDetailsMessage"
+        );
+
+    message.innerHTML = "<div>جاري اعتماد الفاتورة...</div>";
+
+    try {
+        const response = await fetch(
+            `/api/purchases/${currentPurchaseId}/approve`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            throw new Error(
+                data.error || "فشل اعتماد الفاتورة"
+            );
+        }
+
+        message.innerHTML = `
+            <div>
+                تم اعتماد الفاتورة بنجاح.
+                رقم القيد: ${data.movement_no}
+            </div>
+        `;
+
+        await openPurchase(currentPurchaseId);
+
+    } catch (error) {
+        message.innerHTML = `
+            <div>
+                حدث خطأ أثناء اعتماد الفاتورة:
+                ${error.message}
+            </div>
+        `;
+    }
+}
+
+
+function hidePurchaseDetails() {
+
+    document.getElementById(
+        "purchaseDetailsCard"
+    ).style.display = "none";
+
+
+    document.getElementById(
+        "purchasesListCard"
+    ).style.display = "block";
+
+
+    document.getElementById(
+        "purchaseFormCard"
+    ).style.display = "none";
+
+}
+
+
+async function showPurchaseHeaderEdit() {
+
+    const invoiceNo =
+        document.getElementById(
+            "detailInvoiceNo"
+        ).textContent.trim();
+
+    const message =
+        document.getElementById(
+            "purchaseDetailsMessage"
+        );
+
+    try {
+
+        const response =
+            await fetch("/api/purchases");
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "تعذر تحميل بيانات الفاتورة"
+            );
+        }
+
+        const invoice =
+            (data.rows || []).find(
+                row =>
+                    row.invoice_no === invoiceNo
+            );
+
+        if (!invoice) {
+            throw new Error(
+                "فاتورة الشراء غير موجودة"
+            );
+        }
+
+        if (invoice.status !== "draft") {
+            throw new Error(
+                "لا يمكن تعديل فاتورة غير مسودة"
+            );
+        }
+
+        await loadPurchaseHeaderEditData();
+
+        document.getElementById(
+            "purchase_edit_supplier_id"
+        ).value =
+            invoice.supplier_id || "";
+
+        document.getElementById(
+            "purchase_edit_supplier_invoice_no"
+        ).value =
+            invoice.supplier_invoice_no || "";
+
+        document.getElementById(
+            "purchase_edit_invoice_date"
+        ).value =
+            invoice.invoice_date || "";
+
+        document.getElementById(
+            "purchase_edit_warehouse_id"
+        ).value =
+            invoice.warehouse_id || "";
+
+        document.getElementById(
+            "purchase_edit_currency_id"
+        ).value =
+            invoice.currency_id || "";
+
+        document.getElementById(
+            "purchase_edit_exchange_rate"
+        ).value =
+            invoice.exchange_rate || 1;
+
+        document.getElementById(
+            "purchase_edit_payment_method"
+        ).value =
+            invoice.payment_method || "credit";
+
+        document.getElementById(
+            "purchase_edit_notes"
+        ).value =
+            invoice.notes || "";
+
+        document.getElementById(
+            "purchaseHeaderEditSection"
+        ).style.display = "block";
+
+        message.innerHTML = "";
+
+    } catch (error) {
+
+        message.innerHTML = `
+            <div>
+                حدث خطأ: ${error.message}
+            </div>
+        `;
+
+    }
+}
+
+
+async function savePurchaseHeaderEdit() {
+
+    const message =
+        document.getElementById(
+            "purchaseDetailsMessage"
+        );
+
+    const invoiceNo =
+        document.getElementById(
+            "detailInvoiceNo"
+        ).textContent.trim();
+
+    const supplierId =
+        document.getElementById(
+            "purchase_edit_supplier_id"
+        ).value;
+
+    const supplierInvoiceNo =
+        document.getElementById(
+            "purchase_edit_supplier_invoice_no"
+        ).value.trim();
+
+    const invoiceDate =
+        document.getElementById(
+            "purchase_edit_invoice_date"
+        ).value;
+
+    const warehouseId =
+        document.getElementById(
+            "purchase_edit_warehouse_id"
+        ).value;
+
+    const currencyId =
+        document.getElementById(
+            "purchase_edit_currency_id"
+        ).value;
+
+    const exchangeRate =
+        document.getElementById(
+            "purchase_edit_exchange_rate"
+        ).value;
+
+    const paymentMethod =
+        document.getElementById(
+            "purchase_edit_payment_method"
+        ).value;
+
+    const notes =
+        document.getElementById(
+            "purchase_edit_notes"
+        ).value.trim();
+
+
+    if (!supplierId) {
+        message.innerHTML =
+            "<div>يجب اختيار المورد.</div>";
+        return;
+    }
+
+
+    if (!invoiceDate) {
+        message.innerHTML =
+            "<div>يجب إدخال تاريخ الفاتورة.</div>";
+        return;
+    }
+
+
+    if (!currencyId) {
+        message.innerHTML =
+            "<div>يجب اختيار العملة.</div>";
+        return;
+    }
+
+
+    if (
+        !exchangeRate ||
+        Number(exchangeRate) <= 0
+    ) {
+        message.innerHTML =
+            "<div>سعر الصرف يجب أن يكون أكبر من صفر.</div>";
+        return;
+    }
+
+
+    if (!paymentMethod) {
+        message.innerHTML =
+            "<div>يجب اختيار طريقة الدفع.</div>";
+        return;
+    }
+
+
+    const purchaseResponse =
+        await fetch("/api/purchases");
+
+    const purchaseData =
+        await purchaseResponse.json();
+
+    if (!purchaseResponse.ok) {
+        message.innerHTML =
+            `<div>${purchaseData.error || "تعذر تحميل الفواتير."}</div>`;
+        return;
+    }
+
+
+    const invoice =
+        (purchaseData.rows || []).find(
+            row =>
+                row.invoice_no === invoiceNo
+        );
+
+
+    if (!invoice) {
+        message.innerHTML =
+            "<div>فاتورة الشراء غير موجودة.</div>";
+        return;
+    }
+
+
+    if (invoice.status !== "draft") {
+        message.innerHTML =
+            "<div>لا يمكن تعديل فاتورة غير مسودة.</div>";
+        return;
+    }
+
+
+    const payload = {
+        supplier_id: Number(supplierId),
+        supplier_invoice_no: supplierInvoiceNo,
+        invoice_date: invoiceDate,
+        warehouse_id:
+            warehouseId
+                ? Number(warehouseId)
+                : null,
+        currency_id: Number(currencyId),
+        exchange_rate: Number(exchangeRate),
+        payment_method: paymentMethod,
+        notes: notes
+    };
+
+
+    const confirmed =
+        confirm(
+            "هل تريد حفظ تعديلات بيانات الفاتورة؟"
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `/api/purchases/${invoice.id}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body:
+                        JSON.stringify(payload)
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "تعذر حفظ بيانات الفاتورة."
+            );
+        }
+
+
+        alert(
+            "تم حفظ بيانات الفاتورة بنجاح."
+        );
+
+
+        document.getElementById(
+            "purchaseHeaderEditSection"
+        ).style.display = "none";
+
+
+        await loadPurchases();
+
+        await openPurchase(invoice.id);
+
+
+    } catch (error) {
+
+        message.innerHTML = `
+            <div>
+                حدث خطأ: ${error.message}
+            </div>
+        `;
+
+    }
+}
+
+
+function cancelPurchaseHeaderEdit() {
+
+    document.getElementById(
+        "purchaseHeaderEditSection"
+    ).style.display = "none";
+
+    document.getElementById(
+        "purchaseDetailsMessage"
+    ).innerHTML = "";
+}
+
+
+async function loadPurchaseHeaderEditData() {
+
+    const supplierSelect =
+        document.getElementById(
+            "purchase_edit_supplier_id"
+        );
+
+    const warehouseSelect =
+        document.getElementById(
+            "purchase_edit_warehouse_id"
+        );
+
+    const currencySelect =
+        document.getElementById(
+            "purchase_edit_currency_id"
+        );
+
+    const suppliersResponse =
+        await fetch("/api/partners");
+
+    const suppliersData =
+        await suppliersResponse.json();
+
+    if (!suppliersResponse.ok) {
+        throw new Error(
+            suppliersData.error ||
+            "تعذر تحميل الموردين"
+        );
+    }
+
+    supplierSelect.innerHTML =
+        '<option value="">اختر المورد</option>';
+
+    (suppliersData.partners || [])
+        .filter(
+            partner =>
+                partner.partner_type === "supplier" &&
+                Number(partner.is_active) === 1
+        )
+        .forEach(partner => {
+
+            const option =
+                document.createElement("option");
+
+            option.value = partner.id;
+
+            option.textContent =
+                `${partner.code || ""} - ${partner.name}`;
+
+            supplierSelect.appendChild(option);
+
+        });
+
+
+    const warehousesResponse =
+        await fetch("/api/warehouses");
+
+    const warehousesData =
+        await warehousesResponse.json();
+
+    if (!warehousesResponse.ok) {
+        throw new Error(
+            warehousesData.error ||
+            "تعذر تحميل المستودعات"
+        );
+    }
+
+    warehouseSelect.innerHTML =
+        '<option value="">بدون مستودع</option>';
+
+    (warehousesData.rows || [])
+        .filter(
+            warehouse =>
+                Number(warehouse.is_active) === 1
+        )
+        .forEach(warehouse => {
+
+            const option =
+                document.createElement("option");
+
+            option.value = warehouse.id;
+
+            option.textContent =
+                `${warehouse.code} - ${warehouse.name}`;
+
+            warehouseSelect.appendChild(option);
+
+        });
+
+
+    const currenciesResponse =
+        await fetch("/api/currencies");
+
+    const currenciesData =
+        await currenciesResponse.json();
+
+    if (!currenciesResponse.ok) {
+        throw new Error(
+            currenciesData.error ||
+            "تعذر تحميل العملات"
+        );
+    }
+
+    currencySelect.innerHTML =
+        '<option value="">اختر العملة</option>';
+
+    (currenciesData.rows || [])
+        .forEach(currency => {
+
+            const option =
+                document.createElement("option");
+
+            option.value = currency.id;
+
+            option.textContent =
+                `${currency.code} - ${currency.name}`;
+
+            currencySelect.appendChild(option);
+
+        });
+}
+
+
+async function loadPurchaseProducts() {
+
+    const select =
+        document.getElementById(
+            "purchase_product_id"
+        );
+
+
+    select.innerHTML =
+        '<option value="">جاري تحميل الأصناف...</option>';
+
+
+    try {
+
+        const response =
+            await fetch("/api/products");
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "تعذر تحميل الأصناف"
+            );
+
+        }
+
+
+        const products =
+            (data.items || [])
+            .filter(product =>
+                Number(product.is_active) === 1 &&
+                Number(product.is_stock_item) === 1
+            );
+
+
+        select.innerHTML =
+            '<option value="">اختر الصنف</option>';
+
+
+        products.forEach(product => {
+
+            const option =
+                document.createElement("option");
+
+            option.value =
+                product.id;
+
+            option.dataset.unitId =
+                product.base_unit_id;
+
+            option.textContent =
+                `${product.code} - ${product.name} ` +
+                `(${product.unit_name || product.unit_code || ""})`;
+
+            select.appendChild(option);
+
+        });
+
+
+        if (!products.length) {
+
+            select.innerHTML =
+                '<option value="">لا توجد أصناف مخزنية</option>';
+
+        }
+
+
+    } catch (error) {
+
+        select.innerHTML =
+            '<option value="">تعذر تحميل الأصناف</option>';
+
+        console.error(
+            "LOAD_PURCHASE_PRODUCTS_ERROR",
+            error
+        );
+
+    }
+
+}
+
+
+async function loadPurchaseItems(purchaseId) {
+
+    const body =
+        document.getElementById(
+            "purchaseItemsBody"
+        );
+
+
+    body.innerHTML = `
+        <tr>
+            <td colspan="10" style="text-align:center;">
+                جاري تحميل الأصناف...
+            </td>
+        </tr>
+    `;
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/purchases/" +
+                purchaseId +
+                "/items"
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "تعذر تحميل أصناف الفاتورة"
+            );
+
+        }
+
+
+        const rows =
+            data.rows || [];
+
+
+        if (!rows.length) {
+
+            body.innerHTML = `
+                <tr>
+                    <td colspan="10"
+                        style="text-align:center;">
+                        لا توجد أصناف في هذه الفاتورة
+                    </td>
+                </tr>
+            `;
+
+            return;
+
+        }
+
+
+        body.innerHTML =
+            rows.map((row, index) => {
+
+                const unitName =
+                    row.unit_name ||
+                    row.unit_code ||
+                    "";
+
+
+                return `
+                    <tr>
+
+                        <td>
+                            ${index + 1}
+                        </td>
+
+                        <td>
+                            ${row.product_code || ""}
+                        </td>
+
+                        <td>
+                            ${row.product_name || ""}
+                        </td>
+
+                        <td>
+                            ${unitName}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.quantity || 0
+                            ).toFixed(
+                                Number(
+                                    row.decimal_places || 0
+                                )
+                            )}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.unit_price || 0
+                            ).toFixed(2)}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.discount || 0
+                            ).toFixed(2)}
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.tax_amount || 0
+                            ).toFixed(2)}
+                            ${
+                                Number(
+                                    row.tax_rate || 0
+                                ) > 0
+                                ? " (" +
+                                  Number(
+                                      row.tax_rate
+                                  ).toFixed(2) +
+                                  "%)"
+                                : ""
+                            }
+                        </td>
+
+                        <td>
+                            ${Number(
+                                row.line_total || 0
+                            ).toFixed(2)}
+                        </td>
+
+                        <td>
+                            <button
+                                type="button"
+                                onclick="editPurchaseItem(${purchaseId}, ${row.id})">
+                                تعديل
+                            </button>
+
+                            <button
+                                type="button"
+                                onclick="deletePurchaseItem(${purchaseId}, ${row.id})">
+                                حذف
+                            </button>
+                        </td>
+
+                    </tr>
+                `;
+
+            }).join("");
+
+
+    } catch (error) {
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="10"
+                    style="text-align:center;">
+                    حدث خطأ: ${error.message}
+                </td>
+            </tr>
+        `;
+
+    }
+
+}
+
+
+async function editPurchaseItem(purchaseId, itemId) {
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/purchases/" +
+                purchaseId +
+                "/items"
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "تعذر تحميل بيانات الصنف"
+            );
+        }
+
+        const item =
+            (data.rows || []).find(
+                row => Number(row.id) === Number(itemId)
+            );
+
+        if (!item) {
+            throw new Error(
+                "صنف الفاتورة غير موجود"
+            );
+        }
+
+        document.getElementById(
+            "purchase_product_id"
+        ).value = item.product_id;
+
+        document.getElementById(
+            "purchase_quantity"
+        ).value = item.quantity;
+
+        document.getElementById(
+            "purchase_unit_price"
+        ).value = item.unit_price;
+
+        document.getElementById(
+            "purchase_discount"
+        ).value = item.discount;
+
+        document.getElementById(
+            "purchase_tax_rate"
+        ).value = item.tax_rate;
+
+        document.getElementById(
+            "purchase_edit_item_id"
+        ).value = item.id;
+
+        document.getElementById(
+            "purchaseItemSaveButton"
+        ).textContent = "حفظ التعديل";
+
+        document.getElementById(
+            "purchaseItemCancelEditButton"
+        ).style.display = "inline-block";
+
+        document.querySelector(
+            "#purchaseItemFormSection h3"
+        ).textContent = "تعديل صنف في الفاتورة";
+
+    } catch (error) {
+
+        alert(
+            "حدث خطأ: " +
+            error.message
+        );
+
+    }
+
+}
+
+
+async function savePurchaseItem() {
+
+    const productId =
+        Number(
+            document.getElementById(
+                "purchase_product_id"
+            ).value
+        );
+
+    const quantity =
+        Number(
+            document.getElementById(
+                "purchase_quantity"
+            ).value
+        );
+
+    const unitPrice =
+        Number(
+            document.getElementById(
+                "purchase_unit_price"
+            ).value
+        );
+
+    const discount =
+        Number(
+            document.getElementById(
+                "purchase_discount"
+            ).value || 0
+        );
+
+    const taxRate =
+        Number(
+            document.getElementById(
+                "purchase_tax_rate"
+            ).value || 0
+        );
+
+    const editItemId =
+        Number(
+            document.getElementById(
+                "purchase_edit_item_id"
+            ).value || 0
+        );
+
+    if (!productId) {
+        alert("اختر الصنف أولًا.");
+        return;
+    }
+
+    if (!quantity || quantity <= 0) {
+        alert("أدخل كمية صحيحة أكبر من صفر.");
+        return;
+    }
+
+    if (unitPrice < 0) {
+        alert("سعر الوحدة لا يمكن أن يكون سالبًا.");
+        return;
+    }
+
+    if (discount < 0) {
+        alert("الخصم لا يمكن أن يكون سالبًا.");
+        return;
+    }
+
+    if (taxRate < 0) {
+        alert("نسبة الضريبة لا يمكن أن تكون سالبة.");
+        return;
+    }
+
+    const purchaseResponse =
+        await fetch("/api/purchases");
+
+    const purchaseData =
+        await purchaseResponse.json();
+
+    const invoiceNo =
+        document.getElementById(
+            "detailInvoiceNo"
+        ).textContent.trim();
+
+    const invoice =
+        (purchaseData.rows || []).find(
+            row => row.invoice_no === invoiceNo
+        );
+
+    if (!invoice) {
+        alert("تعذر العثور على فاتورة الشراء.");
+        return;
+    }
+
+    if (invoice.status !== "draft") {
+        alert("لا يمكن تعديل فاتورة ليست في حالة مسودة.");
+        return;
+    }
+
+    const productOption =
+        document.querySelector(
+            "#purchase_product_id option:checked"
+        );
+
+    const unitId =
+        Number(
+            productOption?.dataset.unitId || 0
+        );
+
+    if (!unitId) {
+        alert("تعذر تحديد وحدة الصنف.");
+        return;
+    }
+
+    const payload = {
+        product_id: productId,
+        unit_id: unitId,
+        quantity: quantity,
+        unit_price: unitPrice,
+        discount: discount,
+        tax_rate: taxRate,
+        notes: ""
+    };
+
+    let url;
+    let method;
+
+    if (editItemId) {
+        url =
+            "/api/purchases/" +
+            invoice.id +
+            "/items/" +
+            editItemId;
+
+        method = "PUT";
+    } else {
+        url =
+            "/api/purchases/" +
+            invoice.id +
+            "/items";
+
+        method = "POST";
+    }
+
+    const confirmed =
+        confirm(
+            editItemId
+            ? "هل تريد حفظ تعديل الصنف؟"
+            : "هل تريد إضافة الصنف إلى الفاتورة؟"
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(url, {
+                method: method,
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "تعذر حفظ الصنف"
+            );
+        }
+
+        alert(
+            editItemId
+            ? "تم تعديل الصنف بنجاح."
+            : "تمت إضافة الصنف بنجاح."
+        );
+
+        cancelPurchaseItemEdit();
+
+        await loadPurchaseItems(invoice.id);
+        await openPurchase(invoice.id);
+
+    } catch (error) {
+
+        alert(
+            "حدث خطأ: " +
+            error.message
+        );
+
+    }
+
+}
+
+
+function cancelPurchaseItemEdit() {
+
+    document.getElementById(
+        "purchase_edit_item_id"
+    ).value = "";
+
+    document.getElementById(
+        "purchase_product_id"
+    ).value = "";
+
+    document.getElementById(
+        "purchase_quantity"
+    ).value = "1";
+
+    document.getElementById(
+        "purchase_unit_price"
+    ).value = "0";
+
+    document.getElementById(
+        "purchase_discount"
+    ).value = "0";
+
+    document.getElementById(
+        "purchase_tax_rate"
+    ).value = "0";
+
+    document.getElementById(
+        "purchaseItemSaveButton"
+    ).textContent = "+ إضافة الصنف";
+
+    document.getElementById(
+        "purchaseItemCancelEditButton"
+    ).style.display = "none";
+
+    document.querySelector(
+        "#purchaseItemFormSection h3"
+    ).textContent = "إضافة صنف إلى الفاتورة";
+}
+
+
+async function deletePurchaseItem(purchaseId, itemId) {
+
+    const confirmed =
+        confirm(
+            "هل تريد حذف هذا الصنف من فاتورة الشراء؟"
+        );
+
+
+    if (!confirmed) {
+
+        return;
+
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/purchases/" +
+                purchaseId +
+                "/items/" +
+                itemId,
+                {
+                    method: "DELETE"
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.error ||
+                "تعذر حذف الصنف"
+            );
+
+        }
+
+
+        alert(
+            "تم حذف الصنف من الفاتورة بنجاح."
+        );
+
+
+        await loadPurchaseItems(
+            purchaseId
+        );
+
+
+        const purchasesResponse =
+            await fetch("/api/purchases");
+
+
+        const purchasesData =
+            await purchasesResponse.json();
+
+
+        if (!purchasesResponse.ok) {
+
+            throw new Error(
+                purchasesData.error ||
+                "تعذر تحديث إجماليات الفاتورة"
+            );
+
+        }
+
+
+        const invoice =
+            (purchasesData.rows || []).find(
+                row =>
+                    Number(row.id) ===
+                    Number(purchaseId)
+            );
+
+
+        if (invoice) {
+
+            document.getElementById(
+                "detailSubtotal"
+            ).textContent =
+                Number(
+                    invoice.subtotal || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailDiscountTotal"
+            ).textContent =
+                Number(
+                    invoice.discount_total || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailTaxTotal"
+            ).textContent =
+                Number(
+                    invoice.tax_total || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailGrandTotal"
+            ).textContent =
+                Number(
+                    invoice.grand_total || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailPaidAmount"
+            ).textContent =
+                Number(
+                    invoice.paid_amount || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailRemainingAmount"
+            ).textContent =
+                Number(
+                    invoice.remaining_amount || 0
+                ).toFixed(2);
+
+        }
+
+
+    } catch (error) {
+
+        alert(
+            error.message ||
+            "حدث خطأ أثناء حذف الصنف."
+        );
+
+    }
+
+}
+
+
+async function addPurchaseItem() {
+
+    const select =
+        document.getElementById(
+            "purchase_product_id"
+        );
+
+
+    const productId =
+        select.value;
+
+
+    const quantity =
+        document.getElementById(
+            "purchase_quantity"
+        ).value;
+
+
+    const unitPrice =
+        document.getElementById(
+            "purchase_unit_price"
+        ).value;
+
+
+    const discount =
+        document.getElementById(
+            "purchase_discount"
+        ).value;
+
+
+    const taxRate =
+        document.getElementById(
+            "purchase_tax_rate"
+        ).value;
+
+
+    if (!productId) {
+
+        alert("يرجى اختيار الصنف.");
+
+        return;
+
+    }
+
+
+    if (
+        !quantity ||
+        Number(quantity) <= 0
+    ) {
+
+        alert("يجب أن تكون الكمية أكبر من صفر.");
+
+        return;
+
+    }
+
+
+    if (
+        unitPrice === "" ||
+        Number(unitPrice) < 0
+    ) {
+
+        alert("سعر الوحدة غير صحيح.");
+
+        return;
+
+    }
+
+
+    if (
+        discount === "" ||
+        Number(discount) < 0
+    ) {
+
+        alert("الخصم غير صحيح.");
+
+        return;
+
+    }
+
+
+    if (
+        taxRate === "" ||
+        Number(taxRate) < 0
+    ) {
+
+        alert("نسبة الضريبة غير صحيحة.");
+
+        return;
+
+    }
+
+
+    const detailsCard =
+        document.getElementById(
+            "purchaseDetailsCard"
+        );
+
+
+    if (
+        detailsCard.style.display === "none" ||
+        !detailsCard.style.display
+    ) {
+
+        alert("لم يتم فتح فاتورة.");
+
+        return;
+
+    }
+
+
+    const invoiceNo =
+        document.getElementById(
+            "detailInvoiceNo"
+        ).textContent.trim();
+
+
+    if (!invoiceNo) {
+
+        alert("لم يتم تحديد الفاتورة.");
+
+        return;
+
+    }
+
+
+    try {
+
+        const purchasesResponse =
+            await fetch("/api/purchases");
+
+
+        const purchasesData =
+            await purchasesResponse.json();
+
+
+        if (!purchasesResponse.ok) {
+
+            throw new Error(
+                purchasesData.error ||
+                "تعذر تحميل الفاتورة"
+            );
+
+        }
+
+
+        const invoice =
+            (purchasesData.rows || []).find(
+                row =>
+                    String(row.invoice_no) ===
+                    invoiceNo
+            );
+
+
+        if (!invoice) {
+
+            throw new Error(
+                "تعذر تحديد رقم الفاتورة."
+            );
+
+        }
+
+
+        if (invoice.status !== "draft") {
+
+            alert(
+                "لا يمكن إضافة أصناف إلى فاتورة غير مسودة."
+            );
+
+            return;
+
+        }
+
+
+        const selectedOption =
+            select.options[
+                select.selectedIndex
+            ];
+
+
+        const productText =
+            selectedOption
+                ? selectedOption.textContent
+                : "الصنف";
+
+
+        const confirmed =
+            confirm(
+                "إضافة الصنف:\n" +
+                productText +
+                "\nالكمية: " +
+                quantity +
+                "\nسعر الوحدة: " +
+                unitPrice
+            );
+
+
+        if (!confirmed) {
+
+            return;
+
+        }
+
+
+        const unitId =
+            selectedOption.dataset.unitId;
+
+
+        if (!unitId) {
+
+            throw new Error(
+                "لم يتم تحديد وحدة الصنف."
+            );
+
+        }
+
+
+        const response =
+            await fetch(
+                "/api/purchases/" +
+                invoice.id +
+                "/items",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body: JSON.stringify({
+                        product_id:
+                            Number(productId),
+
+                        unit_id:
+                            Number(unitId),
+
+                        quantity:
+                            Number(quantity),
+
+                        unit_price:
+                            Number(unitPrice),
+
+                        discount:
+                            Number(discount),
+
+                        tax_rate:
+                            Number(taxRate),
+
+                        notes: ""
+                    })
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.error ||
+                "تعذر إضافة الصنف"
+            );
+
+        }
+
+
+        alert(
+            "تمت إضافة الصنف إلى الفاتورة بنجاح."
+        );
+
+
+        await loadPurchaseItems(
+            invoice.id
+        );
+
+
+        const refreshedResponse =
+            await fetch("/api/purchases");
+
+
+        const refreshedData =
+            await refreshedResponse.json();
+
+
+        const refreshedInvoice =
+            (refreshedData.rows || []).find(
+                row =>
+                    Number(row.id) ===
+                    Number(invoice.id)
+            );
+
+
+        if (refreshedInvoice) {
+
+            document.getElementById(
+                "detailSubtotal"
+            ).textContent =
+                Number(
+                    refreshedInvoice.subtotal || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailDiscountTotal"
+            ).textContent =
+                Number(
+                    refreshedInvoice.discount_total || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailTaxTotal"
+            ).textContent =
+                Number(
+                    refreshedInvoice.tax_total || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailGrandTotal"
+            ).textContent =
+                Number(
+                    refreshedInvoice.grand_total || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailPaidAmount"
+            ).textContent =
+                Number(
+                    refreshedInvoice.paid_amount || 0
+                ).toFixed(2);
+
+
+            document.getElementById(
+                "detailRemainingAmount"
+            ).textContent =
+                Number(
+                    refreshedInvoice.remaining_amount || 0
+                ).toFixed(2);
+
+        }
+
+
+        document.getElementById(
+            "purchase_quantity"
+        ).value = "1";
+
+
+        document.getElementById(
+            "purchase_unit_price"
+        ).value = "0";
+
+
+        document.getElementById(
+            "purchase_discount"
+        ).value = "0";
+
+
+        document.getElementById(
+            "purchase_tax_rate"
+        ).value = "0";
+
+
+    } catch (error) {
+
+        alert(
+            error.message ||
+            "حدث خطأ أثناء إضافة الصنف."
+        );
+
+    }
+
+}
+
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+        await loadPurchases();
+        await openPurchaseFromUrl();
+    }
+);
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>مخزن الكاشير (POS)</title>
+    <style>
+        body { font-family: sans-serif; background: #1e1e2f; color: white; padding: 20px; }
+        .card { background: #2a2a40; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        input, select, button { padding: 10px; margin: 5px; border-radius: 5px; border: none; }
+        button { background: #4CAF50; color: white; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border-bottom: 1px solid #444; text-align: right; }
+    </style>
+</head>
+<body>
+    <h1>📦 مخزن الكاشير (POS)</h1>
+
+    <div class="card">
+        <h2>إضافة منتج سريع</h2>
+        <input type="text" id="code" placeholder="كود المنتج (اتركه فارغاً للتوليد التلقائي)">
+        <input type="text" id="name" placeholder="اسم المنتج">
+        <select id="unit" onchange="updateUnitLabel()">
+            <option value="2">قطعة</option>
+            <option value="3">كيلو</option>
+        </select>
+        <input type="number" id="buy" placeholder="سعر الشراء">
+        <input type="number" id="sell" placeholder="سعر البيع">
+        <input type="number" id="qty" placeholder="الكمية">
+        <span id="unitLabel" style="margin-right:10px;font-size:14px;color:#aaa;">قطعة</span>
+        <button onclick="addProduct()">حفظ</button>
+    </div>
+    <div class="card">
+        <h2>المنتجات في المخزن</h2>
+        <table id="productTable">
+            <thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>السعر</th></tr></thead>
+            <tbody><tr><td colspan="4">جاري التحميل...</td></tr></tbody>
+        </table>
+    </div>
+    <script>
+        function updateUnitLabel() {
+            const unit = document.getElementById("unit").value;
+            const label = document.getElementById("unitLabel");
+            label.textContent = unit === "3" ? "كيلو جرام" : "قطعة";
+        }
+        async function loadProducts() {
+            try {
+                const res = await fetch("/api/pos-inventory");
+                const json = await res.json();
+                const tbody = document.querySelector("#productTable tbody");
+                if (!json.products || json.products.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan=\"4\">لا توجد منتجات</td></tr>";
+                    return;
+                }
+                tbody.innerHTML = json.products.map(p => {
+                    const qty = Number(p.qty || 0);
+                    const color = qty <= 0 ? "color: red; font-weight: bold;" : (qty < 10 ? "color: orange;" : "");
+                    return "<tr><td>" + p.code + "</td><td>" + p.name + "</td><td style='" + color + "'>" + (qty <= 0 ? "نفذ" : qty) + "</td><td>" + (p.sell_price || 0) + "</td><td><button onclick=\"restock(" + p.id + "); sellReturn(" + p.id + ")\" style=\"background:#17a2b8; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;\">+ توريد</button></td></tr>";
+                }).join("");
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        async function addProduct() {
+            const data = {
+                code: document.getElementById("code").value,
+                name: document.getElementById("name").value,
+                unit_id: document.getElementById("unit").value,
+                buy_price: document.getElementById("buy").value,
+                sell_price: document.getElementById("sell").value,
+                qty: document.getElementById("qty").value
+            };
+            const res = await fetch("/api/pos-inventory/quick-add", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(data)
+            });
+            const json = await res.json();
+            alert(json.message || "تمت الإضافة");
+            loadProducts();
+        }
+        window.onload = loadProducts;
+    </script>
+
+<script>
+async function restock(pid) {
+    const qty = prompt("أدخل الكمية التي تريد إضافتها للمخزن:");
+    if (!qty || isNaN(qty) || Number(qty) <= 0) return;
+    const res = await fetch("/api/pos-inventory/restock", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({product_id: pid, qty: Number(qty)})
+    });
+    const data = await res.json();
+    if (data.ok) { alert(data.message); loadProducts(); }
+    else { alert("خطأ: " + data.error); }
+}
+</script>
+
+
+
+<div class="card" style="margin-top: 20px; border: 1px solid #444; padding: 15px; border-radius: 8px; background: #2a2a40;">
+    <h3>💸 تسجيل مصروف جديد</h3>
+    <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <input type="text" id="expDesc" placeholder="وصف المصروف (مثلاً: أكياس)" style="flex: 2; padding: 10px; border-radius: 5px; border: 1px solid #555; background: #1e1e2f; color: white;">
+        <input type="number" id="expAmount" placeholder="المبلغ" style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #555; background: #1e1e2f; color: white;">
+        <button onclick="saveExpense()" style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">حفظ المصروف</button>
+    </div>
+    <div id="expMsg" style="margin-top: 10px; font-size: 14px;"></div>
+</div>
+
+
+<h3 style="margin-top: 20px;">📋 آخر المصروفات</h3>
+<table id="expensesTable" style="width: 100%; border-collapse: collapse; margin-top: 10px; background: #2a2a40; color: white;">
+    <thead>
+        <tr style="background: #1e1e2f;">
+            <th style="padding: 10px; border: 1px solid #444;">#</th>
+            <th style="padding: 10px; border: 1px solid #444;">الوصف</th>
+            <th style="padding: 10px; border: 1px solid #444;">المبلغ</th>
+            <th style="padding: 10px; border: 1px solid #444;">التاريخ</th>
+        </tr>
+    </thead>
+    <tbody id="expensesBody">
+        <tr><td colspan="4" style="text-align:center; padding:10px;">جاري التحميل...</td></tr>
+    </tbody>
+</table>
+
+<script>
+async function saveExpense() {
+    const desc = document.getElementById('expDesc').value;
+    const amount = document.getElementById('expAmount').value;
+    const msg = document.getElementById('expMsg');
+    
+    if (!desc || !amount || Number(amount) <= 0) {
+        msg.style.color = 'red';
+        msg.innerText = 'الرجاء إدخال وصف ومبلغ صحيح.';
+        return;
+    }
+    
+    msg.style.color = 'yellow';
+    msg.innerText = 'جاري الحفظ...';
+    
+    const res = await fetch("/api/pos/expense", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({description: desc, amount: Number(amount)})
+    });
+    const data = await res.json();
+    
+    if (data.ok) {
+        msg.style.color = 'green';
+        msg.innerText = '✅ تم تسجيل المصروف بنجاح!';
+        document.getElementById('expDesc').value = '';
+        document.getElementById('expAmount').value = '';
+        loadExpenses();
+    } else {
+        msg.style.color = 'red';
+        msg.innerText = '❌ خطأ: ' + data.error;
+    }
+}
+</script>
+<script>
+async function loadExpenses() {
+    try {
+        const res = await fetch("/api/pos/expenses/list");
+        const data = await res.json();
+        const tbody = document.getElementById("expensesBody");
+        if (data.ok && data.expenses && data.expenses.length > 0) {
+            tbody.innerHTML = data.expenses.map((e, i) => 
+                `<tr>
+                    <td style="padding: 8px; border: 1px solid #444;">${i+1}</td>
+                    <td style="padding: 8px; border: 1px solid #444;">${e.description}</td>
+                    <td style="padding: 8px; border: 1px solid #444; color: #ff6b6b;">${e.amount}</td>
+                    <td style="padding: 8px; border: 1px solid #444;">${e.created_at || ""}</td>
+                </tr>`
+            ).join("");
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">لا توجد مصروفات مسجلة</td></tr>';
+        }
+    } catch(e) { console.error(e); }
+}
+
+// استدعاء الدالة عند تحميل الصفحة وبعد حفظ مصروف
+window.addEventListener("load", loadExpenses);
+</script>
+
+<script>
+async function sellReturn(pid) {
+    const qty = prompt("أدخل الكمية المرتجعة:");
+    if (!qty || isNaN(qty) || Number(qty) <= 0) return;
+    const refund = prompt("أدخل المبلغ المسترد (ل.س):");
+    if (!refund || isNaN(refund)) return;
+    
+    // نبحث عن آخر فاتورة لهذا المنتج
+    const res = await fetch("/api/products/" + pid + "/latest_sale");
+    const data = await res.json();
+    if (!data.ok || !data.sale_id) { alert("لا توجد فاتورة سابقة لهذا المنتج"); return; }
+    
+    const ret = await fetch("/api/sales/" + data.sale_id + "/return", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({product_id: pid, quantity: Number(qty), refund_amount: Number(refund)})
+    });
+    const rdata = await ret.json();
+    alert(rdata.message || rdata.error);
+    if (rdata.ok) loadProducts();
+}
+</script>
+</body>
+</html>

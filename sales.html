@@ -1,0 +1,2243 @@
+<script>
+function updateInvoiceSummary() {
+    const rows = document.querySelectorAll("#itemsTableBody tr");
+    let units = 0, count = 0, total = 0;
+
+    rows.forEach(row => {
+        const c = row.querySelectorAll("td");
+        if (c.length < 7) return;
+        const q = parseFloat((c[4].innerText || "").replace(/,/g, ""));
+        const t = parseFloat((c[5].innerText || "").replace(/[^0-9.-]/g, ""));
+        if (!Number.isFinite(q)) return;
+        units += q;
+        count++;
+        total += Number.isFinite(t) ? t : 0;
+    });
+
+    const u = document.getElementById("summaryTotalUnits");
+    const n = document.getElementById("summaryTotalItems");
+    const p = document.getElementById("summaryTotalPrice");
+    if (u) u.innerText = Number(units.toFixed(3)).toString();
+    if (n) n.innerText = count;
+    if (p) p.innerText = total.toFixed(2) + " ل.س";
+}
+
+document.addEventListener("click", function() {
+    setTimeout(updateInvoiceSummary, 300);
+});
+</script>
+
+<style>
+    /* تنسيق جدول أصناف الفاتورة */
+    #saleItemsTable {
+        direction: rtl !important;
+        width: 100% !important;
+        border-collapse: collapse !important;
+        table-layout: fixed !important;
+    }
+    #saleItemsTable th {
+        background-color: #f2f2f2 !important;
+        color: #333 !important;
+        font-weight: bold !important;
+        border: 1px solid #ccc !important;
+        padding: 10px 5px !important;
+        text-align: center !important;
+    }
+    #saleItemsTable td {
+        border: 1px solid #ddd !important;
+        padding: 8px 5px !important;
+        text-align: center !important;
+        vertical-align: middle !important;
+    }
+    /* تحديد عرض كل عمود */
+    #saleItemsTable th:nth-child(1), #saleItemsTable td:nth-child(1) { width: 5%; }  /* # */
+    #saleItemsTable th:nth-child(2), #saleItemsTable td:nth-child(2) { width: 12%; } /* الكود */
+    #saleItemsTable th:nth-child(3), #saleItemsTable td:nth-child(3) { width: 20%; } /* الصنف */
+    #saleItemsTable th:nth-child(4), #saleItemsTable td:nth-child(4) { width: 8%; }  /* الوحدة */
+    #saleItemsTable th:nth-child(5), #saleItemsTable td:nth-child(5) { width: 8%; }  /* الكمية */
+    #saleItemsTable th:nth-child(6), #saleItemsTable td:nth-child(6) { width: 10%; } /* السعر */
+    #saleItemsTable th:nth-child(7), #saleItemsTable td:nth-child(7) { width: 8%; }  /* الخصم */
+    #saleItemsTable th:nth-child(8), #saleItemsTable td:nth-child(8) { width: 8%; }  /* الضريبة */
+    #saleItemsTable th:nth-child(9), #saleItemsTable td:nth-child(9) { width: 10%; } /* الإجمالي */
+    #saleItemsTable th:nth-child(10), #saleItemsTable td:nth-child(10) { width: 11%; } /* الإجراء */
+</style>
+
+<style>
+    /* إصلاح جدول أصناف الفاتورة (id="itemsTable") */
+    #itemsTable {
+        direction: rtl !important;
+    }
+    #itemsTable th {
+        text-align: right !important;
+        background-color: #f8f9fa !important;
+        color: #333 !important;
+        padding: 10px !important;
+        border: 1px solid #ddd !important;
+        white-space: nowrap !important;
+    }
+    #itemsTable td {
+        text-align: right !important;
+        padding: 8px !important;
+        border: 1px solid #ddd !important;
+    }
+    /* إعطاء عمود الإجراء عرضاً ثابتاً حتى لا يختفي */
+    #itemsTable th:last-child, #itemsTable td:last-child {
+        width: 100px !important;
+        text-align: center !important;
+    }
+</style>
+
+<style>
+    /* جعل عناوين نافذة الإغلاق داكنة وواضحة على الخلفية البيضاء */
+    #sessionCloseModal label {
+        color: #333333 !important;
+        font-weight: bold !important;
+    }
+    /* تغيير أي نص رمادي فاتح داخل النافذة إلى رمادي داكن */
+    #sessionCloseModal [style*="color:#888"], 
+    #sessionCloseModal [style*="color:#999"], 
+    #sessionCloseModal [style*="color:gray"],
+    #sessionCloseModal .muted {
+        color: #555555 !important;
+    }
+    /* إصلاح النصوص داخل الحقول (لتكون داكنة على خلفية فاتحة) */
+    #sessionCloseModal input, 
+    #sessionCloseModal textarea {
+        color: #222222 !important;
+        background-color: #f8f9fa !important;
+    }
+</style>
+
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<style id="kstore-summary-reference">
+.k-summary-left {
+    box-sizing: border-box !important;
+    direction: rtl !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 8px !important;
+    margin: 0 !important;
+    background: #f7f7f7 !important;
+    border: 2px solid #b7a9ce !important;
+    border-radius: 2px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    color: #222 !important;
+    font-size: 13px !important;
+}
+
+.k-summary-left .k-summary-row {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    min-height: 38px !important;
+    margin: 0 !important;
+    padding: 5px 8px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    background: #fff !important;
+    border: 1px solid #c9c9c9 !important;
+    border-radius: 2px !important;
+    color: #222 !important;
+}
+
+.k-summary-left .k-summary-row span {
+    color: #333 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+}
+
+.k-summary-left .k-summary-row strong {
+    display: inline-block !important;
+    min-width: 58px !important;
+    text-align: center !important;
+    color: #222 !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    overflow-wrap: anywhere !important;
+}
+
+.k-summary-left .k-summary-row.k-total {
+    min-height: 46px !important;
+    background: #d5edc8 !important;
+    border: 2px solid #88aa80 !important;
+}
+
+.k-summary-left .k-summary-row.k-total span,
+.k-summary-left .k-summary-row.k-total strong {
+    color: #173d16 !important;
+    font-weight: 800 !important;
+}
+
+.k-summary-left .k-summary-row.k-total strong {
+    font-size: 16px !important;
+}
+
+@media (max-width: 600px) {
+    .k-summary-left {
+        padding: 5px !important;
+        gap: 4px !important;
+    }
+
+    .k-summary-left .k-summary-row {
+        min-height: 34px !important;
+        padding: 4px 5px !important;
+        gap: 4px !important;
+    }
+
+    .k-summary-left .k-summary-row span {
+        font-size: 12px !important;
+    }
+
+    .k-summary-left .k-summary-row strong {
+        min-width: 48px !important;
+        font-size: 13px !important;
+    }
+
+    .k-summary-left .k-summary-row.k-total strong {
+        font-size: 14px !important;
+    }
+}
+</style>
+
+<style>.kstore-layout .k-sidebar-right,#productCatalogList{background:#fff!important;color:#222!important;opacity:1!important}.kstore-layout #productCatalogList>div{background:#fff!important;color:#222!important;opacity:1!important;visibility:visible!important;border:1px solid #ccc!important}.kstore-layout #productCatalogList strong{color:#111!important;opacity:1!important}.kstore-layout #productCatalogList span{opacity:1!important}#saleItemsTable tbody td{color:#111!important;background-color:#fff!important;opacity:1!important;visibility:visible!important}#saleItemsTable tbody td *{color:#111!important;opacity:1!important;visibility:visible!important}</style>
+
+<div class="kstore-layout">
+    <!-- الشريط العلوي (Header) -->
+    <div class="k-header">
+        <div class="k-header-right">
+            <div>رقم الطلب: <strong id="headerSaleNumber">—</strong></div>
+            <div>نوع الطلب: <strong id="headerSaleType">عادي</strong></div>
+            <div>العميل: <strong id="headerCustomerName">عميل نقدي</strong></div>
+        </div>
+        <div class="k-header-center">
+            <input type="text" placeholder="بحث عن عميل (F3)" class="k-search-input">
+        </div>
+        <div class="k-header-left">
+            <div>المستخدم: <strong>مدير الفرع</strong></div>
+            <div>التاريخ: <strong>2026/10/24</strong></div>
+        </div>
+    </div>
+
+    <!-- شريط الأدوات (تحت الهيدر) -->
+    <div class="k-toolbar">
+        <select class="k-select"><option>كل التصنيفات</option></select>
+        <input type="text" placeholder="بحث..." class="k-search-small">
+        <button class="k-btn">إضافة صنف (F2)</button>
+        <button class="k-btn">سجل العرض</button>
+    </div>
+
+    <!-- المنطقة الوسطى (3 أعمدة) -->
+    <div class="k-main-area">
+        <!-- العمود الأيمن: المنتجات السريعة -->
+        <div class="k-sidebar-right">
+            <h3>الأصناف</h3>
+            <label for="productCategorySelect" style="display:block;margin:10px 4px 6px;font-weight:bold;color:#333;font-size:14px;">التصنيفات</label>
+            <select id="productCategorySelect" style="width:100%;min-height:44px;padding:10px 12px;margin:0 0 12px;border:1px solid #b8c7d8;border-radius:9px;background:#f8fafc;color:#26364a;font-size:15px;font-weight:600;cursor:pointer;outline:none;box-sizing:border-box;"><option value="all">الكل</option></select>
+            <div id="productCatalogList" style="margin-top: 10px; overflow-y: auto; max-height: calc(100vh - 300px);">
+                <p style="text-align:center; color:#666;">جاري تحميل المنتجات...</p>
+            </div>
+            
+        </div>
+
+        <div id="productsResizeHandle" title="اسحب لتغيير عرض الأصناف"></div>
+        <!-- العمود الأوسط: الجدول -->
+        <div class="k-center-table">
+            <table class="k-table" id="saleItemsTable">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">التصنيف</th>
+                        <th style="width: 35%;"><div>رقم الفاتورة</div><div id="saleInvoiceNo">—</div></th>
+                        <th style="width: 15%;">باركود</th>
+                        <th style="width: 10%;">السعر</th>
+                        <th style="width: 10%;">الكمية</th>
+                        <th style="width: 15%;">السعر الكلي</th>
+                        <th style="width: 12%;">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="itemsTableBody">
+                    <tr><td colspan="7" style="text-align:center; color:#aaa; padding:20px;">لا توجد أصناف</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- العمود الأيسر: ملخص الفاتورة على نمط KStore -->
+        <div class="k-summary-left">
+            <div class="k-summary-row">
+                <strong id="summaryTotalUnits">0</strong>
+                <span>عدد الوحدات:</span>
+            </div>
+            <div class="k-summary-row">
+                <strong id="summaryTotalItems">0</strong>
+                <span>عدد الأصناف:</span>
+            </div>
+            <div class="k-summary-row">
+                <strong id="summaryInvoiceDiscount">0 ج.م</strong>
+                <span>خصم الفاتورة:</span>
+            </div>
+            <div class="k-summary-row k-total">
+                <strong id="summaryTotalPrice">0.00 ج.م</strong>
+                <span>إجمالي الفاتورة:</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- الشريط السفلي (Footer) -->
+    <div class="k-footer">
+        <div class="k-footer-right">
+            <button class="k-btn-footer">جديد</button>
+            <button class="k-btn-footer">حذف</button>
+            <button class="k-btn-footer">تعديل</button>
+        </div>
+        <div class="k-footer-center">
+            <button class="k-btn-footer">الطلبات</button>
+            <button class="k-btn-footer">المشتريات</button>
+            <button type="button" class="k-btn-footer" id="btnShowDraftSales">المسودات</button>
+            <button type="button" class="k-btn-footer" id="btnHoldSale">تعليق الفاتورة</button>
+            <button type="button" class="k-btn-footer" id="btnShowHeldSales">الفواتير المعلّقة</button>
+            <button type="button" class="k-btn-footer" id="btnOpenReturns">مرتجع</button>
+            <a href="/delivery" id="btnOpenDelivery" class="k-btn-footer" style="text-decoration:none; text-align:center; padding:10px; display:inline-block;">ديلفري</a>
+            <a href="/delivery/pending" id="btnPendingDelivery" class="k-btn-footer" style="text-decoration:none;text-align:center;padding:10px;display:inline-block;">طلبات التوصيل</a>
+            <button class="k-btn-footer">الدفعات</button>
+            <button class="k-btn-footer">المصروفات</button>
+            <button class="k-btn-footer">فتح الدرج</button>
+        </div>
+        <div class="k-footer-left">
+            <button class="k-btn-pay">دفع (F10)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentSaleId = null;
+document.getElementById("btnOpenDelivery").addEventListener("click", function(e) {
+    e.preventDefault();
+    if (!currentSaleId) {
+        alert("لا توجد فاتورة حالية. أضف صنفًا أولًا.");
+        return;
+    }
+    window.location.href = "/delivery?sale_id=" + encodeURIComponent(currentSaleId);
+});
+
+
+// استعادة رقم الفاتورة من جلسة المتصفح
+try {
+    const savedId = sessionStorage.getItem('kstore_current_sale_id');
+    if (savedId && /^\d+$/.test(savedId)) {
+        currentSaleId = Number(savedId);
+    }
+} catch (e) {
+    console.warn('[POS] تعذر استعادة رقم الفاتورة', e);
+}
+let currentProductCategory = "all";
+async function loadProductsForSidebar() {
+    const container = document.getElementById('productCatalogList');
+
+    if (!container) {
+        console.error('[POS] حاوية المنتجات غير موجودة');
+        return;
+    }
+
+    if (window.__posSidebarLoading) return;
+    window.__posSidebarLoading = true;
+    container.textContent = 'جاري تحميل المنتجات...';
+
+    try {
+        const res = await fetch('/api/products?limit=50', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!res.ok) {
+            throw new Error('HTTP ' + res.status);
+        }
+
+        const data = await res.json();
+        const list = Array.isArray(data.items) ? data.items :
+                     Array.isArray(data.products) ? data.products : null;
+
+        if (!list) {
+            throw new Error('صيغة استجابة المنتجات غير متوقعة');
+        }
+
+        const categorySelect=document.getElementById("productCategorySelect"); if(categorySelect){try{const r=await fetch("/api/product-categories",{credentials:"same-origin",headers:{"Accept":"application/json"}});if(!r.ok)throw new Error("HTTP "+r.status);const d=await r.json();const cs=Array.isArray(d.items)?d.items:[];categorySelect.replaceChildren(new Option("الكل","all"));cs.filter(x=>Number(x.is_active)!==0).forEach(x=>categorySelect.add(new Option(x.name,String(x.id))));categorySelect.value=currentProductCategory;categorySelect.style.background=categorySelect.value==="all"?"#f8fafc":"#e3f2fd";categorySelect.style.borderColor=categorySelect.value==="all"?"#b8c7d8":"#3986c8";categorySelect.onchange=()=>{currentProductCategory=categorySelect.value;categorySelect.style.background=categorySelect.value==="all"?"#f8fafc":"#e3f2fd";categorySelect.style.borderColor=categorySelect.value==="all"?"#b8c7d8":"#3986c8";container.querySelectorAll("[data-category-id]").forEach(card=>{card.style.display=currentProductCategory==="all"||card.dataset.categoryId===currentProductCategory?"":"none";});};}catch(e){console.warn("[POS] تعذر تحميل التصنيفات",e);}}if (!list.length) {
+            container.textContent = 'لا توجد منتجات.';
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        const cards = [];
+
+        for (const p of list) {
+            const card = document.createElement('div');
+            card.dataset.categoryId = String(p.category_id || "");
+
+            card.style.cssText =
+                'padding:13px;min-height:62px;width:100%;box-sizing:border-box;border:1px solid #d9e2ec;border-right:4px solid #3986c8;box-shadow:0 1px 3px rgba(0,0,0,.08);' +
+                'cursor:pointer;background:#fff;margin-bottom:6px;border-radius:7px;';
+
+            const name = document.createElement('strong');
+            name.style.cssText = 'color:#26364a;font-size:15px;font-weight:700;line-height:1.5;';
+            name.textContent = p.name || 'صنف بدون اسم';
+
+            const priceLabel = document.createElement('span');
+            priceLabel.style.cssText =
+                'display:block;color:#b71c1c;font-size:14px;font-weight:700;margin-top:7px;';
+            priceLabel.textContent = 'جاري تحميل السعر...';
+
+            let price = 0;
+
+            card.append(name, document.createElement('br'), priceLabel);
+
+            card.addEventListener('click', function () { 
+                if (typeof addProductToSale !== 'function') {
+                    console.error('[POS] دالة إضافة المنتج غير موجودة');
+                    return;
+                }
+                addProductToSale(p.id, price);
+            });
+
+            fragment.appendChild(card);
+            cards.push({
+                card: card,
+                product: p,
+                priceLabel: priceLabel,
+                setPrice: value => { price = value; }
+            });
+        }
+
+        container.replaceChildren(fragment);
+if (categorySelect) { const selected = categorySelect.value || "all"; currentProductCategory = selected; container.querySelectorAll("[data-category-id]").forEach(card => { card.style.display = selected === "all" || card.dataset.categoryId === selected ? "" : "none"; }); }
+
+        console.info('[POS] ظهرت المنتجات:', list.length);
+
+        await Promise.allSettled(cards.map(async item => {
+            const p = item.product;
+
+            const params = new URLSearchParams({
+                product_id: String(p.id),
+                unit_id: String(p.base_unit_id || 2),
+                currency_id: '3',
+                price_type: 'sale'
+            });
+
+            try {
+                const response = await fetch(
+                    '/api/product-prices/lookup?' + params,
+                    { credentials: 'same-origin' }
+                );
+
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+
+                const result = await response.json();
+
+                if (result.found && Number.isFinite(Number(result.price))) {
+                    const value = Number(result.price);
+                    item.setPrice(value);
+                    item.priceLabel.textContent =
+                        value.toLocaleString('en-US') + ' ل.س';
+                } else {
+                    item.priceLabel.textContent = 'السعر غير محدد';
+                }
+            } catch (error) {
+                item.priceLabel.textContent = 'تعذر تحميل السعر';
+                console.warn('[POS] تعذر تحميل سعر الصنف', p.id, error);
+            }
+        }));
+
+        console.info('[POS] انتهى تحميل الأسعار');
+
+    } catch (error) {
+        console.error('[POS] فشل تحميل المنتجات:', error);
+        container.textContent = 'تعذر تحميل المنتجات: ' + error.message;
+    } finally {
+        window.__posSidebarLoading = false;
+    }
+}
+
+// دالة الإضافة (مؤقتة)
+
+
+// دالة جلب وعرض أصناف الفاتورة
+let currentSaleStatus = null;
+
+async function loadSaleItems() {
+if (!currentSaleId) return;
+
+try {
+    const res = await fetch(`/api/sales/${currentSaleId}/items`);
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'تعذر تحميل الأصناف');
+    }
+
+    currentSaleStatus = data.status || null;
+    const hn=document.getElementById("headerSaleNumber"); if(hn) hn.textContent=data.invoice_no||"—";
+    const hc=document.getElementById("headerCustomerName"); if(hc) hc.textContent=data.customer_name||"عميل نقدي";
+    const ht=document.getElementById("headerSaleType"); let dd=null; try{dd=JSON.parse(sessionStorage.getItem("delivery_data_"+currentSaleId)||localStorage.getItem("delivery_data_"+currentSaleId)||"null");}catch(e){} if(ht) ht.textContent=dd?"توصيل":"عادي";
+    const invoiceNoEl = document.getElementById("saleInvoiceNo");
+    if (invoiceNoEl) invoiceNoEl.innerText = data.invoice_no || "—";
+    const items = data.items || [];
+    const discountEl = document.getElementById("summaryInvoiceDiscount");
+    const discountTotal = items.reduce((sum, item) => sum + Number(item.discount || 0), 0);
+    if (discountEl) discountEl.innerText = discountTotal.toFixed(2) + " ل.س";
+    const tbody = document.getElementById('itemsTableBody');
+
+    if (!tbody) return;
+
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center">لا توجد أصناف</td></tr>';
+    } else {
+        tbody.innerHTML = items.map(item => `
+            <tr>
+                <td>${item.category_name || '—'}</td>
+                <td>${item.product_name || '—'}</td>
+                <td>${item.product_code || '—'}</td>
+                <td>${Number(item.unit_price || 0).toFixed(2)}</td>
+                <td>${Number(item.quantity || 0)}</td>
+                <td>${Number(item.line_total || 0).toFixed(2)}</td>
+                <td>${currentSaleStatus === 'draft' ? `
+                    <button type="button" onclick="editSaleItem(${item.id})">تعديل</button>
+                    <button type="button" onclick="deleteSaleItem(${item.id})">حذف</button>
+                ` : '—'}</td>
+            </tr>
+        `).join('');
+    }
+} catch (error) {
+    console.error('[POS] تعذر تحميل الأصناف:', error);
+}
+
+updateInvoiceSummary();
+
+}
+</script>
+
+<script>
+async function editSaleItem(itemId) {
+    if (!currentSaleId || currentSaleStatus !== 'draft') {
+        alert('لا يمكن تعديل صنف في فاتورة معتمدة');
+        return;
+    }
+
+    try {
+        const itemsRes = await fetch(`/api/sales/${currentSaleId}/items`);
+        const itemsData = await itemsRes.json();
+        if (!itemsRes.ok || !itemsData.ok) {
+            throw new Error(itemsData.error || 'تعذر تحميل بيانات الصنف');
+        }
+
+        const item = (itemsData.items || []).find(x => Number(x.id) === Number(itemId));
+        if (!item) {
+            alert('الصنف غير موجود في الفاتورة');
+            return;
+        }
+
+        const quantityText = prompt('أدخل الكمية الجديدة:', String(item.quantity));
+        if (quantityText === null) return;
+        const quantity = Number(quantityText);
+
+        const priceText = prompt('أدخل سعر الوحدة الجديد:', String(item.unit_price));
+        if (priceText === null) return;
+        const unit_price = Number(priceText);
+
+        if (!Number.isFinite(quantity) || quantity <= 0 ||
+            !Number.isFinite(unit_price) || unit_price < 0) {
+            alert('يرجى إدخال كمية صحيحة وسعر غير سالب');
+            return;
+        }
+
+        const res = await fetch(`/api/sales/${currentSaleId}/items/${itemId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({quantity, unit_price})
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || 'فشل تعديل الصنف');
+        }
+
+        await loadSaleItems();
+        updateInvoiceSummary();
+        alert('تم تعديل الصنف بنجاح');
+    } catch (error) {
+        alert(error.message || 'تعذر تعديل الصنف');
+    }
+}
+
+async function deleteSaleItem(itemId) {
+    if (!currentSaleId || currentSaleStatus !== 'draft') {
+        alert('لا يمكن حذف صنف من فاتورة معتمدة');
+        return;
+    }
+    if (!confirm('هل تريد حذف هذا الصنف من الفاتورة؟')) return;
+
+    try {
+        const res = await fetch(`/api/sales/${currentSaleId}/items/${itemId}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+            throw new Error(data.error || 'فشل حذف الصنف');
+        }
+
+        const checkRes = await fetch(`/api/sales/${currentSaleId}/items`);
+        const checkData = await checkRes.json();
+        if (!checkRes.ok || !checkData.ok) throw new Error(checkData.error || "تعذر التحقق من أصناف الفاتورة");
+        if (!(checkData.items || []).length) {
+            const deleteRes = await fetch(`/api/sales/${currentSaleId}`, { method: "DELETE" });
+            const deleteData = await deleteRes.json();
+            if (!deleteRes.ok || !deleteData.ok) throw new Error(deleteData.error || "تعذر حذف المسودة الفارغة");
+            currentSaleId = null;
+            currentSaleStatus = null;
+            sessionStorage.removeItem("kstore_current_sale_id");
+            const invoiceNoEl = document.getElementById("saleInvoiceNo");
+            if (invoiceNoEl) invoiceNoEl.innerText = "—";
+            const tbody = document.getElementById("itemsTableBody");
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center">لا توجد أصناف</td></tr>';
+            document.getElementById("headerSaleNumber").textContent = "—";
+            document.getElementById("headerSaleType").textContent = "عادي";
+            document.getElementById("headerCustomerName").textContent = "عميل نقدي";
+            updateInvoiceSummary();
+            alert("تم حذف آخر صنف والمسودة الفارغة نهائيًا.");
+            return;
+        }
+        await loadSaleItems();
+        updateInvoiceSummary();
+        alert("تم حذف الصنف بنجاح");
+    } catch (error) {
+        alert(error.message || 'تعذر حذف الصنف');
+    }
+}
+
+async function addProductToSale(productId, price) {
+    try {
+        if (!currentSaleId) {
+            const today = new Date().toISOString().split('T')[0];
+            const createRes = await fetch('/api/sales', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ currency_id: 3, invoice_date: today })
+            });
+            const createData = await createRes.json();
+            if (createData.ok) {
+                currentSaleId = createData.sale_id;
+                try {
+                    sessionStorage.setItem(
+                        'kstore_current_sale_id',
+                        String(currentSaleId)
+                    );
+                } catch (e) {
+                    console.warn('[POS] تعذر حفظ رقم الفاتورة', e);
+                }
+            } else {
+                alert('خطأ في إنشاء الفاتورة: ' + createData.error);
+                return;
+            }
+        }
+
+        const prodRes = await fetch('/api/products?limit=50');
+        const prodData = await prodRes.json();
+        const list = prodData.items || prodData.products || [];
+        const product = list.find(p => p.id === productId);
+        const unitId = product ? (product.base_unit_id || 2) : 2;
+
+        const itemsRes = await fetch(`/api/sales/${currentSaleId}/items`);
+        const itemsData = await itemsRes.json();
+        if (!itemsRes.ok) {
+            alert('تعذر قراءة أصناف الفاتورة');
+            return;
+        }
+
+        const items = itemsData.items || [];
+        const invoiceNoEl = document.getElementById("saleInvoiceNo");
+        if (invoiceNoEl) invoiceNoEl.innerText = itemsData.invoice_no || "—";
+        const match = items.find(item =>
+            Number(item.product_id) === Number(productId) &&
+            Number(item.unit_id) === Number(unitId) &&
+            Math.abs(Number(item.unit_price) - Number(price)) < 0.000001 &&
+            Number(item.discount || 0) === 0
+        );
+
+        let addRes;
+        if (match) {
+            addRes = await fetch(
+                `/api/sales/${currentSaleId}/items/${match.id}`,
+                {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        quantity: Number(match.quantity || 0) + 1
+                    })
+                }
+            );
+        } else {
+            addRes = await fetch(`/api/sales/${currentSaleId}/items`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    product_id: productId,
+                    unit_id: unitId,
+                    quantity: 1,
+                    unit_price: price,
+                    discount: 0,
+                    notes: ""
+                })
+            });
+        }
+
+        const addData = await addRes.json();
+        if (addData.ok) {
+            await loadSaleItems();
+            updateInvoiceSummary();
+        } else {
+            alert('خطأ في إضافة المنتج: ' + (addData.error || 'خطأ غير معروف'));
+        }
+        
+        } catch(e) {
+        alert('خطأ في الاتصال: ' + e.message);
+    }
+}
+</script>
+
+<script>
+// استدعاء الدالة عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', async function() {
+    if (typeof loadProductsForSidebar === 'function') {
+        loadProductsForSidebar();
+    }
+
+    if (!currentSaleId) return;
+
+    try {
+        const response = await fetch('/api/sales');
+        if (!response.ok) throw new Error('تعذر جلب الفواتير');
+
+        const result = await response.json();
+        const sales = Array.isArray(result.rows) ? result.rows : [];
+        const sale = sales.find(item =>
+            Number(item.id) === Number(currentSaleId)
+        );
+
+        if (sale && sale.status === 'draft') {
+            await loadSaleItems();
+            if (new URLSearchParams(location.search).get('delivery_pay') === '1') {
+                if (typeof window.openDeliveryPayment === 'function') window.openDeliveryPayment();
+            }
+        } else {
+            currentSaleId = null;
+            sessionStorage.removeItem('kstore_current_sale_id');
+        }
+    } catch (e) {
+        console.error('[POS] تعذر استعادة الفاتورة', e);
+    }
+});
+</script>
+
+
+
+<style>
+#paymentModal, #paymentModal * { box-sizing:border-box; }
+#paymentModal {
+  display:none; position:fixed; inset:0; z-index:99999;
+  background:rgba(35,35,35,.58); align-items:center;
+  justify-content:center; padding:18px; direction:rtl;
+  font-family:Arial,Tahoma,sans-serif; color:#222;
+}
+#paymentModal .pm-window {
+  width: min(850px, 96vw); max-height:94vh; overflow:auto;
+  background:#fff; border:1px solid #888; border-radius:0;
+  box-shadow:0 8px 28px #0005;
+}
+#paymentModal .pm-titlebar {
+  display:flex; align-items:center; justify-content:space-between;
+  min-height:39px; padding:5px 10px; background:#e6e6e6;
+  border-bottom:1px solid #bbb; font-weight:bold;
+}
+#paymentModal .pm-window-controls { display:flex; gap:5px; direction:ltr; }
+#paymentModal .pm-window-controls button {
+  width:27px; height:25px; border:1px solid #bbb;
+  background:#f8f8f8; color:#222; cursor:pointer;
+}
+#paymentModal .pm-body { padding:15px; }
+#paymentModal .pm-top {
+  background:#fff5cf; border:1px solid #c9bd8d;
+  padding:10px; margin-bottom:12px;
+}
+#paymentModal .pm-row {
+  display:grid; grid-template-columns:105px minmax(100px,1fr) minmax(130px,1.1fr);
+  gap:9px; align-items:center; margin-bottom:8px;
+}
+#paymentModal .pm-row:last-child { margin-bottom:0; }
+#paymentModal label { font-weight:bold; }
+#paymentModal input, #paymentModal select, #paymentModal textarea {
+  width:100%; min-width:0; padding:9px 8px; min-height:38px;
+  border:1px solid #aaa; border-radius:0; background:white;
+  color:#111; font-size:15px;
+}
+#paymentModal .pm-value { background:#fff; text-align:center; font-weight:bold; }
+#paymentModal .pm-due { background:#d9f0d3; border-color:#85b57c; }
+#paymentModal .pm-section { border:1px solid #ccc; padding:10px; margin-bottom:12px; }
+#paymentModal .pm-pay-row {
+  display:grid; grid-template-columns:95px minmax(100px,1fr) 150px;
+  gap:9px; align-items:center; margin-bottom:9px;
+}
+#paymentModal .pm-pay-row:last-child { margin-bottom:0; }
+#paymentModal .pm-pay-row input { font-weight:bold; font-size:18px; text-align:center; }
+#paymentModal .pm-cash { border:2px solid #174b83 !important; background:#d9ecff !important; color:#111 !important; }
+#paymentModal .pm-method {
+  min-height:40px; border:1px solid #bbb; background:#fafafa;
+  padding:7px; font-weight:bold; text-align:center;
+}
+#paymentModal .pm-discount-row {
+  display:grid; grid-template-columns:95px minmax(100px,1fr) 150px;
+  gap:9px; align-items:center; margin-top:8px;
+}
+#paymentModal .pm-discount-row .pm-discount-label { font-weight:bold; }
+#paymentModal .pm-note { margin-top:12px; }
+#paymentModal .pm-note textarea { min-height:65px; resize:vertical; color:#174b83; }
+#paymentModal .pm-actions {
+  display:flex; justify-content:space-between; gap:8px; margin-top:14px;
+}
+#paymentModal .pm-actions button {
+  flex:1; min-height:43px; padding:8px 5px;
+  background:#eee; border:1px solid #aaa; color:#222;
+  font-weight:bold; cursor:pointer;
+}
+#paymentModal .pm-actions button:active { background:#ddd; }
+#paymentModal .pm-hint { font-size:12px; color:#666; margin:8px 0 0; }
+@media(max-width:560px) {
+  #paymentModal { padding:6px; }
+  #paymentModal .pm-body { padding:9px; }
+  #paymentModal .pm-row { grid-template-columns:85px minmax(0,1fr); }
+  #paymentModal .pm-row .pm-extra { grid-column:2; }
+  #paymentModal .pm-pay-row { grid-template-columns:75px minmax(0,1fr); }
+  #paymentModal .pm-pay-row .pm-method { grid-column:2; }
+  #paymentModal .pm-discount-row { grid-template-columns:75px minmax(0,1fr); }
+  #paymentModal .pm-discount-row .pm-extra { grid-column:2; }
+  #paymentModal .pm-actions { flex-direction:column; }
+}
+</style>
+
+<div id="paymentModal">
+  <div class="pm-window" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
+    <div class="pm-titlebar">
+      <span id="paymentModalTitle">تأكيد KLIK</span>
+      <div class="pm-window-controls">
+        <button type="button" aria-label="تصغير" title="تصغير" id="pmMinimize">−</button>
+        <button type="button" aria-label="تكبير" title="تكبير" id="pmMaximize">□</button>
+        <button type="button" aria-label="إغلاق" title="إغلاق" id="pmCloseTop">×</button>
+      </div>
+    </div>
+
+    <div class="pm-body">
+      <div class="pm-top">
+        <div class="pm-row">
+          <label for="pmInvoiceTotal">قيمة الفاتورة:</label>
+          <select id="pmInvoiceType" class="pm-extra" aria-label="نوع الدفع">
+            <option value="cash">كاش</option>
+            <option value="credit">آجل</option>
+          </select>
+          <input id="pmInvoiceTotal" class="pm-value" readonly value="0.00">
+        </div>
+        <div class="pm-row">
+          <label for="pmDue">المطلوب:</label>
+          <input id="pmDue" class="pm-value pm-due" readonly value="0.00">
+          <span></span>
+        </div>
+      </div>
+
+      <div class="pm-section" id="pmCreditCustomerSection" style="display:none">
+        <label for="pmCreditCustomerSearch">العميل الآجل:</label>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="pmCreditCustomerSearch" type="text" autocomplete="off" placeholder="ابحث باسم العميل أو رقم الهاتف" style="flex:1;min-width:0">
+          <button type="button" id="pmAddCustomer" title="إضافة عميل جديد" aria-label="إضافة عميل جديد">＋</button>
+        </div>
+        <div id="pmCreditCustomerResults" style="display:none;max-height:180px;overflow:auto;background:#fff;border:1px solid #ccc;margin-top:4px"></div>
+        <div id="pmCreditCustomerSelected" style="margin-top:8px;font-weight:bold">لم يتم اختيار عميل</div>
+
+<div id="pmNewCustomerForm" style="display:none;margin-top:10px;padding:10px;border:1px solid #ccc;border-radius:8px">
+  <label for="pmNewCustomerName">اسم العميل:</label>
+  <input id="pmNewCustomerName" type="text" placeholder="اسم العميل" style="width:100%;margin:5px 0 10px">
+  <label for="pmNewCustomerPhone">رقم الهاتف:</label>
+  <input id="pmNewCustomerPhone" type="tel" placeholder="رقم الهاتف" style="width:100%;margin:5px 0 10px">
+  <button type="button" id="pmSaveNewCustomer">حفظ واختيار العميل</button>
+  <button type="button" id="pmCancelNewCustomer">إلغاء</button>
+  <div id="pmNewCustomerMessage" style="margin-top:6px"></div>
+</div>
+
+      </div>
+      <div class="pm-section">
+        <div class="pm-pay-row">
+          <label for="pmCash">المدفوع:</label>
+          <input id="pmCash" class="pm-cash" type="number" min="0" step="0.01" value="0">
+          <div class="pm-method">💰 نقدي</div>
+        </div>
+        <div class="pm-discount-row">
+          <span class="pm-discount-label">الخصم:</span>
+          <select id="pmDiscount">
+            <option value="cash">1 - كاش</option>
+            <option value="percent">2 - خصم نسبة</option>
+            <option value="fixed">3 - خصم نقدي</option>
+            <option value="5">4 - خصم 5%</option>
+            <option value="10">5 - خصم 10%</option>
+            <option value="15">6 - خصم 15%</option>
+            <option value="20">7 - خصم 20%</option>
+            <option value="25">8 - خصم 25%</option>
+          </select>
+          <input id="pmDiscountValue" class="pm-extra" type="number" min="0" step="0.01" placeholder="قيمة الخصم" style="display:none">
+        </div>
+        <div class="pm-discount-row" id="pmPercentRow" style="display:none">
+          <span class="pm-discount-label">نسبة الخصم:</span>
+          <select id="pmPercent">
+            <option value="5">5%</option>
+            <option value="10">10%</option>
+            <option value="15">15%</option>
+            <option value="20">20%</option>
+            <option value="25">25%</option>
+            <option value="30">30%</option>
+            <option value="35">35%</option>
+          </select>
+          <span></span>
+        </div>
+      </div>
+
+      <div class="pm-section">
+        <div class="pm-pay-row">
+          <label for="pmCard">مدفوع البطاقة:</label>
+          <input id="pmCard" type="number" min="0" step="0.01" value="0">
+          <select id="pmCardType" class="pm-method" aria-label="نوع البطاقة">
+            <option value="visa">💳 فيزا كارت (Visa)</option>
+          </select>
+        </div>
+        <div class="pm-pay-row">
+          <label for="pmWallet">مدفوع إلكتروني:</label>
+          <input id="pmWallet" type="number" min="0" step="0.01" value="0">
+          <select id="pmWalletType" class="pm-method" aria-label="نوع الدفع الإلكتروني">
+            <option value="sham_cash">📱 شام كاش (Sham Cash)</option>
+          </select>
+        </div>
+        <div class="pm-pay-row">
+          <label for="pmRemaining">الباقي:</label>
+          <input id="pmRemaining" class="pm-value" readonly value="0.00">
+          <span></span>
+        </div>
+      </div>
+
+      <div class="pm-note">
+        <textarea id="pmNotes" placeholder="اكتب هنا ملاحظات يريد ظهورها على الفاتورة..."></textarea>
+      </div>
+
+      <div class="pm-actions">
+        <button type="button" id="pmCancel">✖ إلغاء الأمر</button>
+        <button type="button" id="pmPrint">▤ تأكيد وإعادة الطباعة</button>
+        <button type="button" id="pmConfirm">✔ تأكيد بدون طباعة (F10)</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const modal = document.getElementById('paymentModal');
+  if (!modal || modal.dataset.ready === '1') return;
+  modal.dataset.ready = '1';
+
+  const $ = id => document.getElementById(id);
+  const payButton = document.querySelector('.k-btn-pay');
+  const totalField = $('pmInvoiceTotal');
+  const dueField = $('pmDue');
+  const cash = $('pmCash');
+  const card = $('pmCard');
+  const wallet = $('pmWallet');
+  const remaining = $('pmRemaining');
+  const discount = $('pmDiscount');
+  const discountValue = $('pmDiscountValue');
+  const percentRow = $('pmPercentRow');
+  const percent = $('pmPercent');
+  const windowBox = modal.querySelector('.pm-window');
+  const invoiceType = document.getElementById("pmInvoiceType");
+  const customerSection = document.getElementById("pmCreditCustomerSection");
+  const customerSearch = document.getElementById("pmCreditCustomerSearch");
+  const customerResults = document.getElementById("pmCreditCustomerResults");
+  const customerSelected = document.getElementById("pmCreditCustomerSelected");
+  const addCustomerBtn = document.getElementById("pmAddCustomer");
+  let selectedCustomer = null;
+  let customerSearchTimer = null;
+
+  let invoiceTotal = 0;
+  let minimized = false;
+  let maximized = false;
+
+
+  if (customerSearch) {
+    customerSearch.addEventListener("input", function () {
+      clearTimeout(customerSearchTimer);
+      const q = customerSearch.value.trim();
+
+      if (!q) {
+        customerResults.style.display = "none";
+        customerResults.innerHTML = "";
+        return;
+      }
+
+      customerSearchTimer = setTimeout(async function () {
+        try {
+          const r = await fetch("/api/partners?q=" + encodeURIComponent(q));
+          const data = await r.json();
+          const partners = (data.partners || []).filter(p =>
+            (p.partner_type === "customer" || p.partner_type === "both") &&
+            Number(p.is_active) === 1
+          );
+
+          customerResults.innerHTML = "";
+
+          if (!partners.length) {
+            customerResults.textContent = "لا يوجد عملاء مطابقون";
+          } else {
+            partners.forEach(function (p) {
+              const b = document.createElement("button");
+              b.type = "button";
+              b.style.cssText = "display:block;width:100%;padding:10px;text-align:right;border:0;border-bottom:1px solid #ddd;background:white";
+              b.textContent = p.name + (p.phone ? " - " + p.phone : "");
+
+              b.addEventListener("click", function () {
+                selectedCustomer = p;
+                const headerCustomer = document.getElementById("headerCustomerName"); if(headerCustomer) headerCustomer.textContent = p.name;
+                customerSearch.value = p.name;
+                customerSelected.textContent =
+                  "العميل المختار: " + p.name +
+                  (p.phone ? " - " + p.phone : "");
+                customerResults.style.display = "none";
+              });
+
+              customerResults.appendChild(b);
+            });
+          }
+
+          customerResults.style.display = "block";
+        } catch (e) {
+          customerResults.textContent = "تعذر البحث عن العملاء";
+          customerResults.style.display = "block";
+        }
+      }, 250);
+    });
+  }
+
+
+  if (addCustomerBtn) {
+    addCustomerBtn.addEventListener("click", function () {
+      const form = document.getElementById("pmNewCustomerForm");
+      form.style.display = "block";
+      document.getElementById("pmNewCustomerName").focus();
+    });
+  }
+
+  document.getElementById("pmCancelNewCustomer").addEventListener("click", function () {
+    document.getElementById("pmNewCustomerForm").style.display = "none";
+    document.getElementById("pmNewCustomerMessage").textContent = "";
+  });
+
+  document.getElementById("pmSaveNewCustomer").addEventListener("click", async function () {
+    const nameInput = document.getElementById("pmNewCustomerName");
+    const phoneInput = document.getElementById("pmNewCustomerPhone");
+    const message = document.getElementById("pmNewCustomerMessage");
+    const saveButton = this;
+    const name = nameInput.value.trim();
+    const phone = phoneInput.value.trim();
+
+    if (!name) {
+      message.textContent = "أدخل اسم العميل.";
+      return;
+    }
+
+    saveButton.disabled = true;
+    message.textContent = "جارٍ حفظ العميل...";
+
+    try {
+      const code = "C" + Date.now().toString().slice(-10);
+      const response = await fetch("/api/partners", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: code,
+          name: name,
+          phone: phone,
+          partner_type: "customer",
+          is_active: true
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        message.textContent = data.error || "تعذر حفظ العميل.";
+        return;
+      }
+
+      selectedCustomer = {
+        id: data.id,
+        name: name,
+        phone: phone,
+        partner_type: "customer",
+        is_active: 1
+      };
+      const headerCustomer = document.getElementById("headerCustomerName"); if(headerCustomer) headerCustomer.textContent = name;
+
+      customerSearch.value = name;
+      customerSelected.textContent = "العميل المختار: " + name +
+        (phone ? " - " + phone : "");
+      customerResults.style.display = "none";
+      document.getElementById("pmNewCustomerForm").style.display = "none";
+      nameInput.value = "";
+      phoneInput.value = "";
+      message.textContent = "";
+      alert("تم إنشاء العميل واختياره للفاتورة.");
+    } catch (error) {
+      message.textContent = "تعذر الاتصال بالخادم.";
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  function numberValue(id) {
+    const value = parseFloat($(id).value);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function readInvoiceTotal() {
+    const field = $('summaryTotalPrice');
+    if (!field) return 0;
+    const raw = field.textContent.replace(/,/g, '').replace(/[^\d.-]/g, '');
+    const value = parseFloat(raw);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  let cashAutoManaged = true;
+
+  function calculate() {
+    let discountAmount = 0;
+    const mode = discount.value;
+
+    if (mode === 'percent') {
+      discountAmount = invoiceTotal * numberValue('pmPercent') / 100;
+    } else if (mode === 'fixed') {
+      discountAmount = numberValue('pmDiscountValue');
+    } else if (/^\d+$/.test(mode)) {
+      discountAmount = invoiceTotal * Number(mode) / 100;
+    }
+
+    discountAmount = Math.min(invoiceTotal, Math.max(0, discountAmount));
+    const due = Math.max(0, invoiceTotal - discountAmount);
+    dueField.value = due.toFixed(2);
+
+    if (cashAutoManaged) {
+      const otherPaid = numberValue('pmCard') + numberValue('pmWallet');
+      cash.value = Math.max(0, due - otherPaid).toFixed(2);
+    }
+
+    const paid = numberValue('pmCash') + numberValue('pmCard') + numberValue('pmWallet');
+    remaining.value = (invoiceType.value === 'credit' ? Math.max(0, due - paid) : Math.max(0, paid - due)).toFixed(2);
+  }
+
+  function updateDiscountUI() {
+    const mode = discount.value;
+    percentRow.style.display = mode === 'percent' ? 'grid' : 'none';
+    discountValue.style.display = mode === 'fixed' ? 'block' : 'none';
+    calculate();
+  }
+
+
+  function updateCreditCustomerUI() {
+    const isCredit = invoiceType && invoiceType.value === "credit";
+    if (customerSection) {
+      customerSection.style.display = isCredit ? "block" : "none";
+    }
+  }
+
+  if (invoiceType) {
+    invoiceType.addEventListener("change", updateCreditCustomerUI);
+    updateCreditCustomerUI();
+  }
+
+  function openModal() {
+    updateInvoiceSummary();
+    invoiceTotal = readInvoiceTotal();
+    totalField.value = invoiceTotal.toFixed(2);
+    dueField.value = invoiceTotal.toFixed(2);
+    cashAutoManaged = true;
+    cash.value = invoiceTotal.toFixed(2);
+    card.value = '0';
+    wallet.value = '0';
+    discount.value = 'cash';
+    discountValue.value = '';
+    percent.value = '5';
+    $('pmNotes').value = '';
+    minimized = false;
+    maximized = false;
+    windowBox.style.display = '';
+    windowBox.style.width = '';
+    windowBox.style.maxHeight = '';
+    windowBox.style.height = '';
+    modal.style.display = 'flex';
+    updateDiscountUI();
+  }
+
+  window.openDeliveryPayment = function () {
+    let d = null;
+    try { d = JSON.parse(sessionStorage.getItem("delivery_data_" + currentSaleId) || localStorage.getItem("delivery_data_" + currentSaleId) || "null"); } catch (e) {}
+    if (!d || !d.customer_id) { alert("بيانات العميل المرتبطة بطلب التوصيل غير مكتملة."); return; }
+    selectedCustomer = { id: Number(d.customer_id), name: d.customer_name || "", phone: d.phone || "" };
+    if (customerSearch) customerSearch.value = selectedCustomer.name;
+    if (customerSelected) customerSelected.textContent = "العميل المختار: " + selectedCustomer.name + (selectedCustomer.phone ? " - " + selectedCustomer.phone : "");
+    if (customerResults) customerResults.style.display = "none";
+    if (invoiceType) invoiceType.value = "credit";
+    const headerCustomer = document.getElementById("headerCustomerName");
+    if (headerCustomer) headerCustomer.textContent = selectedCustomer.name;
+    updateCreditCustomerUI();
+    openModal();
+  };
+
+  function closeModal() {
+    modal.style.display = 'none';
+    if (payButton) payButton.focus();
+  }
+
+  payButton && payButton.addEventListener('click', openModal);
+  $('pmCloseTop').addEventListener('click', closeModal);
+  $('pmCancel').addEventListener('click', closeModal);
+
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal();
+  });
+
+  discount.addEventListener('change', updateDiscountUI);
+  percent.addEventListener('change', calculate);
+  discountValue.addEventListener('input', calculate);
+  cash.addEventListener('input', function () {
+    cashAutoManaged = false;
+    calculate();
+  });
+  [card, wallet].forEach(field => field.addEventListener('input', calculate));
+
+  $('pmMinimize').addEventListener('click', function () {
+    minimized = !minimized;
+    const body = modal.querySelector('.pm-body');
+    body.style.display = minimized ? 'none' : '';
+  });
+
+  $('pmMaximize').addEventListener('click', function () {
+    maximized = !maximized;
+    if (maximized) {
+      windowBox.style.width = 'min(1100px, 98vw)';
+      windowBox.style.maxHeight = '98vh';
+      windowBox.style.height = 'auto';
+    } else {
+      windowBox.style.width = '';
+      windowBox.style.maxHeight = '94vh';
+      windowBox.style.height = '';
+    }
+  });
+
+  
+  
+
+  async function handlePayment(shouldPrint) {
+    let printWindow = null;
+    if (shouldPrint) { printWindow = window.open('about:blank', '_blank'); if (!printWindow) { alert('اسمح بالنوافذ المنبثقة لإتمام الطباعة.'); return; } }
+
+    
+
+    if (!currentSaleId) {
+      if (shouldPrint && printWindow) { printWindow.close(); printWindow = null; }
+      alert('لا توجد فاتورة حالية لاعتمادها.');
+      return;
+    }
+
+    const mode = discount.value;
+    let invoiceDiscount = 0;
+    if (mode === 'percent') {
+      invoiceDiscount = invoiceTotal * numberValue('pmPercent') / 100;
+    } else if (mode === 'fixed') {
+      invoiceDiscount = numberValue('pmDiscountValue');
+    } else if (/^\\d+$/.test(mode)) {
+      invoiceDiscount = invoiceTotal * Number(mode) / 100;
+    }
+    invoiceDiscount = Math.min(invoiceTotal, Math.max(0, invoiceDiscount));
+
+    const isCredit = invoiceType && invoiceType.value === 'credit';
+    if (isCredit && !selectedCustomer) {
+      if (shouldPrint && printWindow) { printWindow.close(); printWindow = null; }
+      alert('يرجى اختيار العميل للفاتورة الآجلة.');
+      return;
+    }
+
+    const cashAmount = numberValue('pmCash');
+    const cardAmount = numberValue('pmCard');
+    const shamAmount = numberValue('pmWallet');
+    const due = Math.max(0, invoiceTotal - invoiceDiscount);
+    const paid = cashAmount + cardAmount + shamAmount;
+    const button = shouldPrint ? $('pmPrint') : $('pmConfirm');
+
+    if (!isCredit && (due <= 0 || paid + 0.01 < due)) {
+      if (shouldPrint && printWindow) { printWindow.close(); printWindow = null; }
+      alert('مجموع النقدي وشام كاش والبطاقة يجب أن يساوي الإجمالي بعد الخصم.');
+      return;
+    }
+
+    if (isCredit) {
+      button.disabled = true;
+      try {
+        const saveResponse = await fetch(`/api/sales/${currentSaleId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_id: selectedCustomer.id,
+            payment_method: 'credit'
+          })
+        });
+        const saveData = await saveResponse.json();
+        if (!saveResponse.ok || !saveData.ok) {
+          if (shouldPrint && printWindow) { printWindow.close(); printWindow = null; }
+          alert(saveData.error || 'تعذر حفظ العميل للفاتورة.');
+          return;
+        }
+
+        const response = await fetch(`/api/sales/${currentSaleId}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+paid_amount: paid,
+delivery_data: JSON.parse((sessionStorage.getItem("delivery_data_" + currentSaleId) || localStorage.getItem("delivery_data_" + currentSaleId)) || "null"),
+payment_method: 'credit',
+invoice_discount: invoiceDiscount,
+payments: {
+  cash: cashAmount,
+  sham_cash: shamAmount,
+  card: cardAmount
+}})
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          if (shouldPrint && printWindow) { printWindow.close(); printWindow = null; }
+          alert(data.error || 'تعذر اعتماد الفاتورة الآجلة.');
+          return;
+        }
+
+        if (shouldPrint && printWindow) { printWindow.location.href = '/print/sale/' + currentSaleId; } else { alert('تم اعتماد الفاتورة الآجلة بنجاح.'); }
+        closeModal();
+        currentSaleId = null;
+        sessionStorage.removeItem('kstore_current_sale_id');
+        if (shouldPrint) { setTimeout(() => location.reload(), 1500); } else { location.reload(); }
+      } catch (error) {
+        if (shouldPrint && printWindow) { printWindow.close(); printWindow = null; }
+        alert('تعذر الاتصال بالخادم. تحقق من حالة الفاتورة قبل إعادة المحاولة.');
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+
+    const methods = [cashAmount, shamAmount, cardAmount].filter(v => v > 0).length;
+    const paymentMethod = methods > 1 ? 'mixed'
+      : cardAmount > 0 ? 'bank_misr'
+      : shamAmount > 0 ? 'bank_ahly' : 'cash';
+
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/sales/${currentSaleId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paid_amount: paid,
+          payment_method: paymentMethod,
+          delivery_data: JSON.parse((sessionStorage.getItem("delivery_data_" + currentSaleId) || localStorage.getItem("delivery_data_" + currentSaleId)) || "null"),
+          invoice_discount: invoiceDiscount,
+          payments: {
+            cash: cashAmount,
+            sham_cash: shamAmount,
+            card: cardAmount
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        if (shouldPrint && printWindow) printWindow.close(); alert("فشل اعتماد الفاتورة: " + (data.error || ("HTTP " + response.status)));
+        return;
+      }
+      if (shouldPrint && printWindow) { printWindow.location.href = "/print/sale/" + currentSaleId; } else { alert("تم اعتماد الفاتورة بنجاح."); }
+      closeModal();
+      currentSaleId = null;
+      sessionStorage.removeItem("kstore_current_sale_id");
+      if (shouldPrint) { setTimeout(() => location.reload(), 1500); } else { location.reload(); }
+    } catch (error) {
+      if (shouldPrint && printWindow) printWindow.close(); alert("خطأ أثناء الاعتماد: " + (error.message || error));
+    } finally {
+      button.disabled = false;
+    }
+  }
+  $('pmConfirm').addEventListener('click', () => handlePayment(false));
+  $('pmPrint').addEventListener('click', () => handlePayment(true));
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && modal.style.display !== 'none') closeModal();
+    if (event.key === 'F10' && !event.repeat) {
+      const tag = event.target && event.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (event.target && event.target.isContentEditable)) return;
+      event.preventDefault();
+      if (modal.style.display === 'none') openModal();
+      else document.getElementById('pmConfirm').click();
+    }
+  });
+})();
+</script>
+
+
+<script>
+(function () {
+    const holdBtn = document.getElementById('btnHoldSale');
+    const heldBtn = document.getElementById('btnShowHeldSales');
+
+    function clearSaleScreen() {
+        const tbody = document.getElementById('itemsTableBody');
+        if (tbody) tbody.innerHTML = '';
+
+        currentSaleId = null;
+        currentSaleStatus = null;
+
+        try {
+            sessionStorage.removeItem('kstore_current_sale_id');
+        } catch (e) {}
+
+        if (typeof updateInvoiceSummary === 'function') {
+            updateInvoiceSummary();
+        }
+    }
+
+    if (holdBtn) {
+        holdBtn.addEventListener('click', async function () {
+            if (!currentSaleId) {
+                alert('لا توجد فاتورة مفتوحة لتعليقها.');
+                return;
+            }
+
+            if (!confirm('هل تريد تعليق الفاتورة الحالية؟')) return;
+
+            try {
+                const response = await fetch(
+                    `/api/sales/${currentSaleId}/hold`,
+                    { method: 'POST' }
+                );
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    alert(data.error || 'تعذر تعليق الفاتورة.');
+                    return;
+                }
+
+                clearSaleScreen();
+                alert('تم تعليق الفاتورة بنجاح. يمكنك اختيار فاتورة معلّقة أو بدء فاتورة جديدة.');
+            } catch (e) {
+                alert('تعذر الاتصال بالخادم. لم يتم تأكيد تعليق الفاتورة.');
+            }
+        });
+    }
+
+    if (heldBtn) {
+        heldBtn.addEventListener('click', async function () {
+            if (currentSaleId) {
+                alert('للحفاظ على الفاتورة الحالية، علّقها أولاً ثم اختر الفاتورة التي تريد استئنافها.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/sales/held');
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    alert(data.error || 'تعذر جلب الفواتير المعلّقة.');
+                    return;
+                }
+
+                const sales = data.sales || [];
+
+                if (!sales.length) {
+                    alert('لا توجد فواتير معلّقة.');
+                    return;
+                }
+
+                const list = sales.map((sale, index) =>
+                    `${index + 1}) ${sale.invoice_no || ('فاتورة #' + sale.id)} — ${sale.invoice_date || ''} — ${Number(sale.grand_total || 0).toLocaleString('en-US')} ل.س`
+                ).join('\n');
+
+                const answer = prompt(
+                    'الفواتير المعلّقة:\n\n' + list +
+                    '\n\nاكتب رقم الفاتورة التي تريد استئنافها، أو اضغط إلغاء.'
+                );
+
+                if (answer === null || answer.trim() === '') return;
+
+                const choice = Number(answer);
+
+                if (!Number.isInteger(choice) || choice < 1 || choice > sales.length) {
+                    alert('رقم غير صحيح. اختر رقماً من القائمة.');
+                    return;
+                }
+
+                const sale = sales[choice - 1];
+
+                const resumeResponse = await fetch(
+                    `/api/sales/${sale.id}/resume`,
+                    { method: 'POST' }
+                );
+                const resumeData = await resumeResponse.json();
+
+                if (!resumeResponse.ok || !resumeData.ok) {
+                    alert(resumeData.error || 'تعذر استئناف الفاتورة.');
+                    return;
+                }
+
+                currentSaleId = Number(sale.id);
+                currentSaleStatus = 'draft';
+
+                try {
+                    sessionStorage.setItem(
+                        'kstore_current_sale_id',
+                        String(currentSaleId)
+                    );
+                } catch (e) {}
+
+                await loadSaleItems();
+                alert('تم استئناف الفاتورة بنجاح.');
+            } catch (e) {
+                alert('حدث خطأ أثناء تحميل الفواتير أو استئناف الفاتورة.');
+                console.error(e);
+            }
+        });
+    }
+})();
+</script>
+<!-- نافذة المرتجعات - التخطيط المعتمد -->
+<style>
+#returnsModal, #returnsModal * { box-sizing: border-box; }
+#returnsModal { font-family: Tahoma, Arial, sans-serif; }
+#returnsModal .rv-window {
+    width: min(96vw, 1050px);
+    max-height: 94vh;
+    overflow: auto;
+    background: #f1f1f1;
+    border: 1px solid #777;
+    color: #111;
+    box-shadow: 0 4px 18px #0005;
+    font-size: 14px;
+}
+#returnsModal .rv-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    background: #173b67;
+    color: #fff;
+    border-bottom: 1px solid #888;
+}
+#returnsModal .rv-title button {
+    min-width: 36px;
+    height: 30px;
+    font-size: 21px;
+    color: #111;
+    background: #eee;
+    border: 1px solid #aaa;
+}
+#returnsModal .rv-body { padding: 12px; }
+#returnsModal .rv-section {
+    border: 1px solid #aaa;
+    background: #fff;
+    margin-bottom: 12px;
+}
+#returnsModal .rv-heading {
+    background: #e0e5eb;
+    padding: 8px 10px;
+    font-weight: bold;
+    border-bottom: 1px solid #bbb;
+}
+#returnsModal .rv-content { padding: 10px; }
+#returnsModal .rv-search-row {
+    display: grid;
+    grid-template-columns: minmax(130px, 0.9fr) minmax(150px, 2fr) auto;
+    gap: 8px;
+    align-items: end;
+}
+#returnsModal .rv-field label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+#returnsModal .rv-field input,
+#returnsModal .rv-field select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 39px;
+    padding: 7px;
+    border: 1px solid #999;
+    border-radius: 0;
+    background: #fff;
+    color: #111;
+}
+#returnsModal button {
+    font-family: inherit;
+    border-radius: 0;
+    cursor: pointer;
+}
+#returnsModal .rv-btn {
+    min-height: 39px;
+    padding: 8px 17px;
+    border: 1px solid #888;
+    background: #e9e9e9;
+    color: #111;
+}
+#returnsModal .rv-primary {
+    background: #173b67;
+    color: #fff;
+    border-color: #173b67;
+}
+#returnsModal .rv-details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+#returnsModal .rv-placeholder {
+    min-height: 42px;
+    padding: 11px;
+    border: 1px solid #ccc;
+    background: #fafafa;
+    color: #555;
+}
+#returnsModal .rv-table-wrap {
+    overflow-x: auto;
+}
+#returnsModal table {
+    width: 100%;
+    min-width: 620px;
+    border-collapse: collapse;
+    background: #fff;
+}
+#returnsModal th {
+    padding: 9px 7px;
+    border: 1px solid #aaa;
+    background: #dce4ef;
+    color: #111;
+    white-space: nowrap;
+}
+#returnsModal td {
+    color: #111 !important;
+    background-color: #fff !important;
+    opacity: 1 !important;
+    padding: 10px 7px;
+    border: 1px solid #ccc;
+    text-align: center;
+}
+#returnsModal #returnsItemsBody td, #returnsModal #returnsItemsBody td span, #returnsModal #returnsItemsBody td input { color: #111 !important; -webkit-text-fill-color: #111 !important; opacity: 1 !important; visibility: visible !important; } #returnsModal #returnsItemsBody td input { background: #fff !important; }
+#returnsModal #returnsItemsBody td { background-color: #000 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; } #returnsModal #returnsItemsBody td input { background-color: #000 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; border: 1px solid #fff !important; }
+#returnsModal #returnsItemsBody tr, #returnsModal #returnsItemsBody td { background: #000 !important; background-color: #000 !important; color: #fff !important; -webkit-text-fill-color: #fff !important; opacity: 1 !important; visibility: visible !important; } #returnsModal #returnsItemsBody td * { color: #fff !important; -webkit-text-fill-color: #fff !important; opacity: 1 !important; visibility: visible !important; }
+#returnsModal #returnsItemsBody td, #returnsModal #returnsItemsBody td * { background-color: #fff !important; color: #000 !important; -webkit-text-fill-color: #000 !important; opacity: 1 !important; visibility: visible !important; filter: none !important; mix-blend-mode: normal !important; font-size: 14px !important; }
+#returnsModal .rv-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 14px 0 18px;
+}
+#returnsModal .rv-actions button {
+    min-width: 145px;
+    min-height: 44px;
+    font-weight: bold;
+}
+#returnsModal .rv-cancel-row {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0 2px;
+}
+#returnsModal .rv-cancel-row button {
+    min-width: 160px;
+    min-height: 42px;
+}
+@media (max-width: 600px) {
+    #returnsModal .rv-body { padding: 7px; }
+    #returnsModal .rv-search-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+    #returnsModal .rv-search-row .rv-type { grid-column: 1 / -1; }
+    #returnsModal .rv-details { grid-template-columns: 1fr; }
+}
+</style>
+
+<div id="returnsModal"
+     style="display:none; position:fixed; inset:0; z-index:10000;
+     background:rgba(0,0,0,.45); direction:rtl; align-items:center;
+     justify-content:center; padding:8px;">
+  <div class="rv-window" role="dialog" aria-modal="true"
+       aria-label="مرتجعات المبيعات">
+    <div class="rv-title">
+      <strong>مرتجعات المبيعات</strong>
+      <button type="button" id="btnCloseReturns" aria-label="إغلاق">×</button>
+    </div>
+
+    <div class="rv-body">
+      <section class="rv-section">
+        <div class="rv-heading">البحث عن الفاتورة</div>
+        <div class="rv-content">
+          <div class="rv-search-row">
+            <div class="rv-field rv-type">
+              <label for="returnsSearchType">نوع البحث</label>
+              <select id="returnsSearchType">
+                <option value="invoice">رقم الفاتورة</option>
+                <option value="name">اسم العميل</option>
+                <option value="phone">رقم الهاتف</option>
+              </select>
+            </div>
+            <div class="rv-field">
+              <label for="returnsInvoiceNo">قيمة البحث</label>
+              <input id="returnsInvoiceNo" type="text"
+                     placeholder="اكتب رقم الفاتورة أو بيانات العميل">
+            </div>
+            <button type="button" id="btnSearchReturns"
+                    class="rv-btn rv-primary">بحث</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="rv-section">
+        <div class="rv-heading">تفاصيل الفاتورة</div>
+        <div class="rv-content">
+          <div class="rv-details">
+            <div class="rv-field">
+              <label>رقم الفاتورة</label>
+              <div id="returnsInvoiceNumber" class="rv-placeholder">—</div>
+            </div>
+            <div class="rv-field">
+              <label>تاريخ الفاتورة</label>
+              <div id="returnsDate" class="rv-placeholder">—</div>
+            </div>
+            <div class="rv-field">
+              <label>اسم العميل</label>
+              <div id="returnsCustomer" class="rv-placeholder">—</div>
+            </div>
+            <div class="rv-field">
+              <label>إجمالي الفاتورة</label>
+              <div id="returnsInvoiceTotal" class="rv-placeholder">—</div>
+            </div>
+            <div class="rv-field">
+              <label>حالة الفاتورة</label>
+              <div id="returnsInvoiceStatus" class="rv-placeholder">—</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="rv-section">
+        <div class="rv-heading">تفاصيل الأصناف</div>
+        <div class="rv-content rv-table-wrap">
+          <table>
+            <thead>
+<tr>
+  <th>م</th>
+  <th>كود الصنف</th>
+  <th>اسم الصنف</th>
+  <th>الكمية المباعة</th>
+  <th>الكمية المرتجعة سابقًا</th>
+  <th>الكمية المتبقية للإرجاع</th>
+  <th>الكمية المراد إرجاعها</th>
+  <th>السعر</th>
+  <th>الإجمالي</th>
+</tr> 
+            </thead>
+            <tbody id="returnsItemsBody">
+              <tr><td colspan="7">ابحث عن فاتورة لعرض الأصناف.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="rv-section">
+        <div class="rv-heading">مرتجعات سابقة</div>
+        <div class="rv-content rv-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>رقم المرتجع</th>
+                <th>التاريخ</th>
+                <th>الصنف</th>
+                <th>الكمية</th>
+                <th>قيمة المرتجع</th>
+              </tr>
+            </thead>
+            <tbody id="returnsPreviousBody">
+              <tr><td colspan="5">لا توجد بيانات معروضة قبل البحث.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div id="returnsInvoiceResult" class="rv-placeholder">
+        لم يتم البحث عن فاتورة بعد.
+      </div>
+
+      <div class="rv-actions">
+        <button type="button" id="btnPartialReturn"
+                class="rv-btn rv-primary">إرجاع جزئي</button>
+        <button type="button" id="btnFullReturn"
+                class="rv-btn">إرجاع كلي</button>
+      </div>
+
+      <div class="rv-cancel-row">
+        <button type="button" id="btnCancelReturns" class="rv-btn">
+          إلغاء الأمر
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* RETURNS_MODAL_BINDING_V1 */
+(function () {
+    const modal = document.getElementById('returnsModal');
+    const openBtn = document.getElementById('btnOpenReturns');
+    const closeBtn = document.getElementById('btnCloseReturns');
+    const cancelBtn = document.getElementById('btnCancelReturns');
+    const searchBtn = document.getElementById('btnSearchReturns');
+    const searchInput = document.getElementById('returnsInvoiceNo');
+    const searchType = document.getElementById('returnsSearchType');
+
+    if (!modal || !openBtn || !searchBtn || !searchInput) return;
+
+    function closeModal() {
+        modal.style.display = 'none';
+    }
+
+    openBtn.addEventListener('click', function () {
+        modal.style.display = 'flex';
+        searchInput.focus();
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) closeModal();
+    });
+
+    function setText(id, value) {
+        const element = document.getElementById(id);
+        if (element) element.textContent =
+            value === null || value === undefined || value === '' ? '—' : String(value);
+    }
+
+    function addCell(row, value) {
+        const cell = document.createElement('td');
+        cell.textContent = value === null || value === undefined ? '—' : String(value);
+        row.appendChild(cell);
+    }
+
+    function clearResults() {
+        ['returnsItemsBody', 'returnsPreviousBody'].forEach(function (id) {
+            const body = document.getElementById(id);
+            if (body) body.replaceChildren();
+        });
+        setText('returnsInvoiceNumber', '—');
+        setText('returnsDate', '—');
+        setText('returnsCustomer', '—');
+        setText('returnsInvoiceTotal', '—');
+        setText('returnsInvoiceStatus', '—');
+        const result = document.getElementById('returnsInvoiceResult');
+        if (result) {
+            result.textContent = '';
+            result.style.color = '';
+        }
+    }
+
+    function showMessage(message, isError) {
+        const result = document.getElementById('returnsInvoiceResult');
+        if (result) {
+            result.textContent = message;
+            result.style.color = isError ? '#b42318' : '#237a3b';
+        } else {
+            alert(message);
+        }
+    }
+
+    function money(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }) + ' ل.س' : '—';
+    }
+
+function renderItems(items) {
+    const body = document.getElementById('returnsItemsBody');
+    if (!body) return;
+    body.replaceChildren();
+
+    const previousReturns = window.returnsPreviousItems || [];
+
+    (items || []).forEach(function (item, index) {
+        const row = document.createElement('tr');
+        const sold = Number(item.quantity) || 0;
+
+        const returned = previousReturns
+            .filter(function (r) {
+                return Number(r.item_id) === Number(item.item_id);
+            })
+            .reduce(function (sum, r) {
+                return sum + (Number(r.quantity) || 0);
+            }, 0);
+
+        const remaining = Math.max(0, sold - returned);
+
+        addCell(row, index + 1);
+        addCell(row, item.product_id);
+        addCell(row, item.product_name);
+        addCell(row, sold);
+        addCell(row, returned);
+        addCell(row, remaining);
+
+        const quantityCell = document.createElement('td');
+        const quantityInput = document.createElement('input');
+        quantityInput.type = 'number';
+        quantityInput.min = '0';
+        quantityInput.max = String(remaining);
+        quantityInput.step = 'any';
+        quantityInput.value = '0';
+        quantityInput.disabled = remaining <= 0;
+        quantityInput.className = 'returns-quantity-input';
+        quantityInput.dataset.itemId = String(item.item_id);
+        quantityInput.dataset.productId = String(item.product_id);
+        quantityInput.setAttribute('aria-label', 'الكمية المراد إرجاعها');
+
+        quantityInput.addEventListener('change', function () {
+            let value = Number(quantityInput.value);
+
+            if (!Number.isFinite(value) || value < 0) value = 0;
+            if (value > remaining) value = remaining;
+
+            quantityInput.value = String(value);
+        });
+
+        quantityCell.appendChild(quantityInput);
+        row.appendChild(quantityCell);
+
+        addCell(row, money(item.unit_price));
+        addCell(row, money(item.line_total));
+
+        body.appendChild(row);
+    });
+
+    if (!items || !items.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 9;
+        cell.textContent = 'لا توجد أصناف في الفاتورة';
+        row.appendChild(cell);
+        body.appendChild(row);
+    }
+
+}
+    function renderPreviousReturns(returns) {
+        const body = document.getElementById("returnsPreviousBody");
+        if (!body) return;
+        body.replaceChildren();
+        (returns || []).forEach(function (item) {
+            const row = document.createElement("tr");
+            addCell(row, item.id ?? item.return_id ?? "");
+            addCell(row, item.created_at ?? item.return_date ?? "");
+            addCell(row, item.product_name ?? item.product_id ?? "");
+            addCell(row, item.quantity ?? "");
+            addCell(row, money(item.refund_amount ?? 0));
+            body.appendChild(row);
+        });
+        if (!returns || !returns.length) {
+            const row = document.createElement("tr");
+            const cell = document.createElement("td");
+            cell.colSpan = 5;
+            cell.textContent = "لا توجد مرتجعات سابقة";
+            row.appendChild(cell);
+            body.appendChild(row);
+        }
+    }
+
+    async function searchInvoice() {
+        const query = searchInput.value.trim();
+        const type = searchType ? searchType.value : 'invoice';
+
+        if (!query) {
+            showMessage('أدخل بيانات البحث أولًا.', true);
+            searchInput.focus();
+            return;
+        }
+
+        clearResults();
+        searchBtn.disabled = true;
+        searchBtn.dataset.oldText = searchBtn.textContent;
+        searchBtn.textContent = 'جارٍ البحث…';
+
+        try {
+            const response = await fetch(
+                '/api/returns/search_invoice?q=' + encodeURIComponent(query) +
+                '&type=' + encodeURIComponent(type),
+                { credentials: 'same-origin' }
+            );
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                showMessage(data.error || 'تعذر إتمام البحث.', true);
+                return;
+            }
+
+            if (data.search_results) {
+                const result = document.getElementById('returnsInvoiceResult');
+                if (!result) return;
+                result.replaceChildren();
+
+                const heading = document.createElement('p');
+                heading.textContent = 'اختر الفاتورة المعتمدة المطلوبة:';
+                result.appendChild(heading);
+
+                data.search_results.forEach(function (invoice) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent =
+                        invoice.customer_name + ' — ' +
+                        invoice.invoice_no + ' — ' +
+                        invoice.invoice_date + ' — ' +
+                        money(invoice.grand_total);
+                    button.style.display = 'block';
+                    button.style.margin = '6px 0';
+                    button.style.maxWidth = '100%';
+                    button.style.whiteSpace = 'normal';
+
+                    button.addEventListener('click', function () {
+                        if (searchType) searchType.value = 'invoice';
+                        searchInput.value = invoice.invoice_no;
+                        searchInvoice();
+                    });
+
+                    result.appendChild(button);
+                });
+                return;
+            }
+
+            const sale = data.sale || {};
+            window.returnsCurrentSale = sale;
+            setText('returnsInvoiceNumber', sale.invoice_no || data.invoice_no);
+            setText('returnsDate', sale.invoice_date);
+            setText('returnsCustomer', sale.customer_name || 'عميل نقدي');
+            setText('returnsInvoiceTotal', money(sale.grand_total));
+
+            const statuses = {
+                approved: 'معتمدة',
+                draft: 'مسودة',
+                cancelled: 'ملغاة',
+                canceled: 'ملغاة'
+            };
+            setText('returnsInvoiceStatus',
+                statuses[String(sale.status || '').toLowerCase()] ||
+                sale.status || 'غير محددة');
+window.returnsPreviousItems = data.previous_returns || [];
+            renderItems(data.items);
+            renderPreviousReturns(data.previous_returns);
+            showMessage('تم العثور على الفاتورة. تنفيذ المرتجعات ما زال معطّلًا.', false);
+        } catch (error) {
+            showMessage('تعذر الاتصال بالخادم أثناء البحث.', true);
+        } finally {
+            searchBtn.disabled = false;
+            searchBtn.textContent = searchBtn.dataset.oldText || 'بحث';
+        }
+    }
+
+    searchBtn.addEventListener('click', searchInvoice);
+    searchInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            searchInvoice();
+        }
+    });    async function executeReturns(full) {
+        const sale = window.returnsCurrentSale;
+        if (!sale || !sale.id) { showMessage('أعد البحث عن الفاتورة أولاً.', true); return; }
+        const items = [];
+        let invalidQuantity = false;
+        document.querySelectorAll('#returnsItemsBody .returns-quantity-input').forEach(function(input) {
+            const max = Number(input.max), qty = full ? max : Number(input.value);
+            const itemId = Number(input.dataset.itemId);
+            if (full && (!Number.isFinite(max) || max <= 0)) return;
+            if (!Number.isFinite(max) || max <= 0 || !Number.isFinite(qty) || qty <= 0 || qty > max || !Number.isInteger(itemId) || itemId <= 0) {
+                invalidQuantity = true;
+                return;
+            }
+            items.push({item_id: itemId, quantity: qty});
+        });
+        if (invalidQuantity) {
+            showMessage('تحقق من الكميات المدخلة؛ يجب أن تكون أكبر من صفر وألا تتجاوز الكمية المتبقية.', true);
+            return;
+        }
+        if (!items.length) { showMessage(full ? 'لا توجد كمية متبقية للإرجاع' : 'أدخل كمية مرتجع صحيحة أولاً.', true); return; }
+        if (!confirm(full ? 'هل تؤكد إرجاع جميع الكميات المتبقية؟' : 'هل تؤكد تنفيذ المرتجع بالكميات المدخلة؟')) return;
+        const buttons = [document.getElementById('btnPartialReturn'), document.getElementById('btnFullReturn')];
+        buttons.forEach(b => { if (b) b.disabled = true; });
+        try {
+            const r = await fetch('/api/returns/execute', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sale_id:Number(sale.id), items:items})});
+            const d = await r.json();
+            if (!r.ok || !d.ok) throw new Error(d.error || d.message || 'تعذر تنفيذ المرتجع.');
+            showMessage('تم تنفيذ المرتجع. للمبلغ المسترد: ' + money(d.refund_amount), false);
+            await searchInvoice();
+        } catch(e) { showMessage(e.message || 'حدث خطأ أثناء التنفيذ.', true); }
+        finally { buttons.forEach(b => { if (b) b.disabled = false; }); }
+    }
+    const partialButton = document.getElementById('btnPartialReturn');
+    const fullButton = document.getElementById('btnFullReturn');
+    if (partialButton) { partialButton.disabled = false; partialButton.addEventListener('click', () => executeReturns(false)); }
+    if (fullButton) { fullButton.disabled = false; fullButton.addEventListener('click', () => executeReturns(true)); }
+})();
+</script>
+
+<script src="/static/js/drafts.js"></script>
+<script src="/static/js/products_resizer.js">
+</script>
+<div id="pendingDeliveryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;padding:3vh 2vw;overflow:auto;direction:rtl">
+  <div style="background:#fff;color:#222;max-width:1200px;margin:auto;border-radius:10px;padding:16px;box-shadow:0 8px 30px #0005">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h3 style="margin:0">طلبات التوصيل المعلقة</h3>
+      <div><button type="button" id="pendingDeliveryRefresh">تحديث</button> <button type="button" id="pendingDeliveryClose">إغلاق</button></div>
+    </div>
+    <div id="pendingDeliveryMessage" style="padding:10px 0;color:#333">جارٍ تحميل الطلبات...</div>
+    <div style="overflow:auto;max-height:72vh">
+      <table style="width:100%;border-collapse:collapse;min-width:1050px;font-size:13px">
+        <thead><tr style="background:#0f3460;color:#fff"><th>الفاتورة</th><th>العميل</th><th>الهاتف</th><th>العنوان</th><th>المندوب</th><th>المنطقة</th><th>الإجمالي</th><th>المتبقي</th><th>التسليم</th><th>التحصيل</th><th>وسيلة الدفع والتحصيل</th></tr></thead>
+        <tbody id="pendingDeliveryRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<style>
+#pendingDeliveryModal th,#pendingDeliveryModal td{border:1px solid #ddd;padding:8px;text-align:right;white-space:normal}
+#pendingDeliveryModal select,#pendingDeliveryModal button{padding:7px;margin:2px}
+#pendingDeliveryModal .pending-collect{background:#198754;color:#fff;border:0;border-radius:4px;cursor:pointer}
+#pendingDeliveryModal .pending-collect:disabled{opacity:.5;cursor:wait}
+</style>
+<script>
+(function(){
+ const modal=document.getElementById('pendingDeliveryModal'), open=document.getElementById('btnPendingDelivery'), close=document.getElementById('pendingDeliveryClose'), refresh=document.getElementById('pendingDeliveryRefresh'), rows=document.getElementById('pendingDeliveryRows'), msg=document.getElementById('pendingDeliveryMessage');
+ if(!modal||!open||!close||!refresh||!rows||!msg)return;
+ const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const money=v=>Number(v||0).toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const status=v=>v==='delivered'?'تم التسليم':v==='collected'?'تم التحصيل':'معلق';
+ async function load(){
+  msg.textContent='جارٍ تحميل الطلبات...';rows.innerHTML='';
+  try{
+   const r=await fetch('/api/sales/delivery/pending',{credentials:'same-origin'}),d=await r.json();
+   if(!r.ok||!d.ok)throw new Error(d.error||'تعذر تحميل القائمة');
+   const list=Array.isArray(d.orders)?d.orders:[];
+   msg.textContent=list.length?'عدد الطلبات: '+list.length:'لا توجد طلبات توصيل معلقة.';
+   rows.innerHTML=list.map(o=>'<tr><td>'+esc(o.invoice_no)+'</td><td>'+esc(o.customer_name)+'</td><td>'+esc(o.phone)+'</td><td>'+esc(o.address)+'</td><td>'+esc(o.rep)+'</td><td>'+esc(o.region_name)+'</td><td>'+money(o.grand_total)+'</td><td>'+money(o.remaining_amount)+'</td><td>'+status(o.delivery_status)+'</td><td>'+status(o.collection_status)+'</td><td>'+(o.collection_status==='collected'?'تم التحصيل':'<select class="pending-method"><option value="cash">نقدي</option><option value="bank_ahly">البنك الأهلي</option><option value="bank_misr">بنك مصر</option></select><button type="button" class="pending-collect" data-sale="'+Number(o.sale_id)+'">تحصيل</button>')+'</td></tr>').join('');
+  }catch(e){msg.textContent=e.message||'حدث خطأ أثناء تحميل الطلبات';}
+ }
+ window.loadPendingDelivery=load;
+ close.addEventListener('click',()=>{modal.style.display='none';});
+ refresh.addEventListener('click',load);
+ modal.addEventListener('click',async e=>{
+  const b=e.target.closest('.pending-collect');if(!b)return;
+  const tr=b.closest('tr'),method=tr&&tr.querySelector('.pending-method');
+  if(!method)return;
+  if(!confirm('تأكيد تحصيل المتبقي لهذه الفاتورة؟'))return;
+  b.disabled=true;
+  try{
+   const r=await fetch('/api/sales/'+encodeURIComponent(b.dataset.sale)+'/delivery/collect',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({payment_method:method.value})});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'تعذر تنفيذ التحصيل');
+   msg.textContent='تم التحصيل بنجاح.';await load();
+  }catch(err){alert(err.message||'حدث خطأ أثناء التحصيل');b.disabled=false;}
+ });
+})();
+</script>
+{% endblock %}
+
+
+
+<!-- الشريط الجانبي لطلبات التوصيل المعلقة -->
+
+
+<!-- زر لفتح الشريط الجانبي (إذا كان مغلقاً) -->
+
+
+<style>
+
+/* إصلاح ألوان جدول الأصناف */
+#saleItemsTable td {
+    color: #000000 !important; /* نص أسود */
+    background-color: #ffffff !important; /* خلفية بيضاء */
+    border: 1px solid #cccccc !important;
+    padding: 8px !important;
+    text-align: right !important;
+}
+
+#saleItemsTable th {
+    color: #ffffff !important; /* نص أبيض */
+    background-color: #0f3460 !important; /* خلفية داكنة */
+    padding: 10px !important;
+    border: 1px solid #0f3460 !important;
+}
+
+#saleItemsTable tbody tr:nth-child(even) td {
+    background-color: #f9f9f9 !important; /* لون فاتح للصفوف الزوجية */
+}
+
+</style>
+
+<style>
+
+/* إجبار النص على الظهور بلون أسود واضح */
+body {
+    color: #000000 !important;
+}
+.kstore-layout, .k-main-area, .k-center-table, .k-table, .k-table td, .k-table th {
+    color: #000000 !important;
+}
+#itemsTableBody td, #saleItemsTable td {
+    color: #000000 !important;
+    background-color: #ffffff !important;
+}
+input, select, textarea {
+    color: #000000 !important;
+    background-color: #ffffff !important;
+}
+
+</style>
+
+<style>
+
+/* إجبار جميع خلايا الجداول على الظهور بلون أسود واضح */
+table, th, td {
+    color: #000000 !important; /* نص أسود */
+}
+table td {
+    background-color: #ffffff !important; /* خلفية بيضاء */
+}
+table th {
+    background-color: #0f3460 !important; /* خلفية داكنة للعناوين */
+    color: #ffffff !important; /* نص أبيض للعناوين */
+}
+/* استهداف جدول الفاتورة بالاسم */
+#saleItemsTable, #saleItemsTable td, #itemsTableBody td {
+    color: #000000 !important;
+    background-color: #ffffff !important;
+}
+
+</style>
