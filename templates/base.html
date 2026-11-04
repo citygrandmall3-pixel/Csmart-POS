@@ -126,19 +126,29 @@
     justify-content: center;
     gap: 7px;
     padding: 9px 16px;
-    border: 1px solid rgba(128,128,128,.3);
+    border: 1px solid #0d6efd;
     border-radius: 9px;
-    background: var(--card, #fff);
-    color: inherit;
+    background: #0d6efd;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(13,110,253,.22);
     font: inherit;
     font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
+    transition: background-color .12s ease, color .12s ease;
 }
-.global-back-button:hover {
-    background: #0b5ed7;
+.global-back-button:hover,
+.global-back-button:focus-visible {
+    background: #0d6efd;
     color: #ffffff;
-    border-color: #0b5ed7;
+    border-color: #0d6efd;
+}
+.global-back-button.is-working {
+    animation: global-back-flash .18s ease-in-out 3;
+}
+@keyframes global-back-flash {
+    0%, 100% { background: #0d6efd; color: #ffffff; }
+    50% { background: #ffffff; color: #0d6efd; }
 }
 
 </style>
@@ -469,14 +479,21 @@
     const backButton = document.getElementById('global-back-button');
     if (!backButton) return;
     backButton.addEventListener('click', function () {
+        if (backButton.dataset.busy === '1') return;
+        backButton.dataset.busy = '1';
+        backButton.classList.remove('is-working');
+        void backButton.offsetWidth;
+        backButton.classList.add('is-working');
         const referrer = document.referrer;
         let sameOrigin = false;
         try { sameOrigin = !!referrer && new URL(referrer).origin === window.location.origin; } catch (e) {}
-        if (sameOrigin && window.history.length > 1) {
-            window.history.back();
-        } else {
-            window.location.href = '/';
-        }
+        window.setTimeout(function () {
+            if (sameOrigin && window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/';
+            }
+        }, 600);
     });
 })();
 </script>
