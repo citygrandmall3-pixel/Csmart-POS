@@ -97,10 +97,9 @@
             <div id="bs-status" style="margin-top:10px; font-weight:bold;"></div>
 
             <hr style="margin:20px 0;">
-            <div class="card" style="margin:15px 0;padding:15px;border:1px solid #c58b32;"><h3>📂 استعادة نسخة احتياطية من الهاتف</h3><p>اختر ملف قاعدة بيانات SQLite محفوظاً على هاتفك (.db أو .sqlite أو .sqlite3)، بحد أقصى 10 ميجابايت.</p><input type="file" id="external-backup-file" accept=".db,.sqlite,.sqlite3" style="width:100%;margin:10px 0;"><button type="button" class="btn btn-danger" onclick="restoreExternalBackup()">♻️ استعادة من ملف خارجي</button><div id="external-restore-status" style="margin-top:10px;"></div></div>
-<h3>📋 النسخ الاحتياطية المتاحة</h3>
+            <h3>📋 النسخ الاحتياطية المتاحة</h3>
             <table id="backupsTable" style="width:100%; border-collapse:collapse; margin-top:10px;">
-                <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>اسم النسخة</th><th>التاريخ</th><th>الحجم</th><th>تنزيل</th><th>استعادة</th></tr></thead>
+                <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>اسم النسخة</th><th>التاريخ</th><th>الحجم</th><th>تنزيل</th></tr></thead>
                 <tbody id="backups-body">
                     {% if backups_list %}
                         {% for b in backups_list %}
@@ -108,7 +107,7 @@
                                 <td style="padding:5px; border:1px solid #444;">{{ b.name }}</td>
                                 <td style="padding:5px; border:1px solid #444;">{{ b.modified }}</td>
                                 <td style="padding:5px; border:1px solid #444;">{{ b.size }} bytes</td>
-                                <td style="padding:5px; border:1px solid #444;"><a href="/api/backups/{{ b.name }}" class="btn btn-sm btn-teal">⬇️ تنزيل</a></td><td style="padding:5px; border:1px solid #444;"><button type="button" class="btn btn-sm btn-danger" onclick="if(confirm(&quot;تحذير: ستُستبدل قاعدة البيانات الحالية بهذه النسخة. هل تريد المتابعة؟&quot;)){fetch(&quot;/api/restore/{{ b.name }}&quot;,{method:&quot;POST&quot;}).then(async r=>({ok:r.ok,data:await r.json()})).then(x=>{alert(x.data.message||x.data.error||&quot;انتهت العملية&quot;);if(x.ok)location.reload()}).catch(e=>alert(&quot;فشل الاتصال: &quot;+e.message))}">♻️ استعادة</button></td>
+                                <td style="padding:5px; border:1px solid #444;"><a href="/api/backups/{{ b.name }}" class="btn btn-sm btn-teal">⬇️ تنزيل</a></td>
                             </tr>
                         {% endfor %}
                     {% else %}
@@ -125,8 +124,41 @@
         </div>
 
         
-        <div id="section-cashiers" class="settings-section" style="display:none;"><h2>👤 إدارة الكاشيرين</h2><p>إدارة حسابات الكاشيرين المصرح لهم بالبيع وفتح الورديات.</p><button type="button" id="btnAddCashier" class="btn btn-gold">➕ إضافة كاشير جديد</button><div style="margin-top:12px;overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="cashiersBody"><tr><td colspan="5">جاري التحميل...</td></tr></tbody></table></div></div><div id="cashierModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999999;align-items:center;justify-content:center;padding:20px"><div style="background:#fff;color:#222;border-radius:12px;padding:20px;max-width:480px;width:100%"><h3 id="cashierModalTitle">إضافة كاشير</h3><input type="hidden" id="cEditId"><div class="field"><label>اسم المستخدم</label><input id="cUsername" autocomplete="off"></div><div class="field"><label>كلمة المرور</label><input id="cPassword" type="password" autocomplete="new-password"><span id="cPwNote"></span></div><div class="field"><label>الاسم الكامل</label><input id="cFullName"></div><div class="field"><label>الهاتف</label><input id="cPhone"></div><button type="button" id="btnSaveCashier" class="btn btn-gold">💾 حفظ</button><button type="button" id="btnCancelCashier" class="btn btn-dark">إلغاء</button></div></div>
-        <div id="section-tax" class="settings-section" style="display:none;">
+        <div id="section-cashiers" class="settings-section" style="display:none;">
+  <h2>👤 إدارة الكاشيرين</h2>
+  <p>إدارة حسابات الكاشيرين والصلاحيات المسموح بها أثناء الوردية.</p>
+  <button type="button" id="btnAddCashier" class="btn btn-gold">➕ إضافة كاشير جديد</button>
+  <div style="margin-top:12px;overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="cashiersBody"><tr><td colspan="5">جاري التحميل...</td></tr></tbody></table></div>
+</div>
+<div id="cashierModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999999;align-items:center;justify-content:center;padding:16px;overflow:auto;">
+  <div style="background:#fff;color:#222;border-radius:12px;padding:20px;max-width:680px;width:100%;max-height:94vh;overflow:auto;">
+    <h3 id="cashierModalTitle">إضافة كاشير</h3>
+    <input type="hidden" id="cEditId">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      <div class="field"><label for="cUsername">اسم المستخدم</label><input id="cUsername" autocomplete="off"></div>
+      <div class="field"><label for="cPassword">كلمة المرور</label><input id="cPassword" type="password" autocomplete="new-password"><span id="cPwNote"></span></div>
+      <div class="field"><label for="cFullName">الاسم الكامل</label><input id="cFullName"></div>
+      <div class="field"><label for="cPhone">الهاتف</label><input id="cPhone"></div>
+    </div>
+    <fieldset style="border:1px solid #ddd;border-radius:9px;padding:12px;margin:14px 0">
+      <legend style="font-weight:bold;padding:0 7px">صلاحيات الكاشير</legend>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">
+        <label><input type="checkbox" id="cPermCanSell"> إنشاء وتعديل واعتماد المبيعات</label>
+        <label><input type="checkbox" id="cPermOpenSession"> فتح الوردية</label>
+        <label><input type="checkbox" id="cPermHoldSale"> تعليق واستئناف الفواتير</label>
+        <label><input type="checkbox" id="cPermCancelDraft"> إلغاء المسودات</label>
+        <label><input type="checkbox" id="cPermOwnReports"> عرض سجل فواتيره وتقارير ورديته</label>
+        <label><input type="checkbox" id="cPermDiscount"> تطبيق الخصومات</label>
+        <label><input type="checkbox" id="cPermViewStock"> عرض كميات المخزون وتفاصيله</label>
+        <label><input type="checkbox" id="cPermOtherSessions"> عرض ورديات الآخرين</label>
+      </div>
+      <div style="margin-top:12px;max-width:260px"><label for="cPermMaxDiscountPct">الحد الأقصى للخصم (%)</label><input id="cPermMaxDiscountPct" type="number" min="0" max="100" step="0.5" value="0" style="width:100%"></div>
+      <small style="display:block;color:#666;margin-top:8px">يُطبّق الحد على الخصم الإجمالي للفاتورة أو الأصناف. تفعيل الخصم وحده لا يسمح بتجاوز النسبة المحددة.</small>
+    </fieldset>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="btnSaveCashier" class="btn btn-gold">💾 حفظ</button><button type="button" id="btnCancelCashier" class="btn btn-dark">إلغاء</button></div>
+  </div>
+</div>
+<div id="section-tax" class="settings-section" style="display:none;">
             <h2>💰 إعدادات ضريبة المبيعات</h2>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:15px;">
                 <div>
@@ -305,14 +337,14 @@
             </div>
             
             <div class="card">
-                <h3>🗺️ مناطق التوصيل</h3>
+                <h3>🛵 خدمات التوصيل</h3>
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
-                    <input type="text" id="newServiceName" placeholder="اسم المنطقة (مثلاً: وسط البلد)" style="flex:1; padding:8px;">
+                    <input type="text" id="newServiceName" placeholder="اسم الخدمة (مثلاً: توصيل عادي)" style="flex:1; padding:8px;">
                     <input type="number" id="newServicePrice" placeholder="السعر" style="width:120px; padding:8px;">
                     <button class="btn btn-gold" onclick="addDeliveryService()">➕ إضافة</button>
                 </div>
                 <table id="servicesTable" style="width:100%; border-collapse:collapse;">
-                    <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>المنطقة</th><th>السعر</th></tr></thead>
+                    <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>الخدمة</th><th>السعر</th></tr></thead>
                     <tbody><tr><td colspan="3">جاري التحميل...</td></tr></tbody>
                 </table>
             </div>
@@ -329,13 +361,32 @@
 
 <script>
     
+    function toggleSubmenu(menuId, event) {
+        event.preventDefault();
+        const menu = document.getElementById(menuId);
+        const arrow = document.getElementById('advanced-arrow');
+        if (menu.style.display === 'none') {
+            menu.style.display = 'block';
+            if (arrow) arrow.innerText = '▲';
+        } else {
+            menu.style.display = 'none';
+            if (arrow) arrow.innerText = '▼';
+        }
+    }
+
+    function showSection(id) {
+        document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
+        document.querySelectorAll('.settings-link').forEach(l => l.classList.remove('active'));
+        document.getElementById('section-' + id).style.display = 'block';
+        event.target.classList.add('active');
+    }
+
     async function saveInvoiceSettings() {
         const payload = {
             invoice_paper_size: document.getElementById("inv-paper-size").value,
             invoice_font_size: document.getElementById("inv-font-size").value,
             invoice_align: document.getElementById("inv-align").value,
             invoice_show_cashier: document.getElementById("inv-show-cashier").value,
-            invoice_show_tax: document.getElementById("inv-show-tax").value,
             invoice_copies: document.getElementById("inv-copies").value,
             invoice_footer_msg: document.getElementById("inv-footer-msg").value
         };
@@ -351,13 +402,10 @@
             else { msg.innerText = "❌ " + data.error; msg.style.color = "red"; }
         } catch(e) { alert("خطأ: " + e.message); }
     }
-document.getElementById("btnSaveCashier").addEventListener("click", function(e) { e.preventDefault(); saveCashier(e); });
-document.addEventListener("DOMContentLoaded", function(){ const generalDiv = document.getElementById("section-general"); if(generalDiv){ const newFields = document.createElement("div"); newFields.innerHTML = `<h4 style="margin-top:20px; color:#ffc107;">إعدادات إضافية</h4><div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:10px;"><div><label>العملة الافتراضية:</label><select id="gen-currency" style="width:100%; padding:8px;"><option>ل.س</option><option>دولار</option></select></div><div><label>تذييل الفاتورة:</label><input type="text" id="gen-footer" style="width:100%; padding:8px;" placeholder="البضاعة المباعة لا ترد"></div></div>`; generalDiv.appendChild(newFields); } const advancedMenu = document.getElementById("advanced-menu"); if(advancedMenu){ const newLi = document.createElement("li"); newLi.innerHTML = `<a href="#" onclick="showSection('advanced_inventory')" class="settings-link" style="font-size:13px;">📦 إعدادات المخزون المتقدمة</a>`; advancedMenu.appendChild(newLi); const newSection = document.createElement("div"); newSection.id = "section-advanced_inventory"; newSection.className = "settings-section"; newSection.style.display = "none"; newSection.innerHTML = `<h2>📦 إعدادات المخزون المتقدمة</h2><div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;"><div><label>توليد الباركود تلقائياً:</label><select style="width:100%; padding:8px;"><option>نعم</option><option>لا</option></select></div><div><label>منع البيع بالسالب:</label><select style="width:100%; padding:8px;"><option>نعم</option><option>لا</option></select></div><div><label>حد الأمان الافتراضي:</label><input type="number" value="10" style="width:100%; padding:8px;"></div><div><label>الجرد الأعمى:</label><select style="width:100%; padding:8px;"><option>نعم</option><option>لا</option></select></div></div>`; document.querySelector(".settings-content").appendChild(newSection); } });</script>
+// تم نقل إدارة الكاشير وربط أحداثها إلى static/js/cashiers.js
+</script>
 
 <script>
-async function loadBackupsTable() { const tbody=document.getElementById("backups-body"); if(!tbody)return; try { const r=await fetch("/api/backups"); const d=await r.json(); if(!r.ok)throw new Error(d.error||"تعذر تحميل النسخ"); tbody.replaceChildren(); const rows=d.backups||[]; if(!rows.length){const tr=document.createElement("tr");const td=document.createElement("td");td.colSpan=5;td.textContent="لا توجد نسخ احتياطية";tr.appendChild(td);tbody.appendChild(tr);return;} rows.forEach(b=>{const tr=document.createElement("tr");[b.name,b.modified,b.size+" bytes"].forEach(v=>{const td=document.createElement("td");td.style.cssText="padding:5px;border:1px solid #444";td.textContent=v;tr.appendChild(td);});const td1=document.createElement("td");td1.style.cssText="padding:5px;border:1px solid #444";const a=document.createElement("a");a.href="/api/backups/"+encodeURIComponent(b.name);a.className="btn btn-sm btn-teal";a.textContent="⬇️ تنزيل";td1.appendChild(a);tr.appendChild(td1);const td2=document.createElement("td");td2.style.cssText="padding:5px;border:1px solid #444";const btn=document.createElement("button");btn.type="button";btn.className="btn btn-sm btn-danger";btn.textContent="♻️ استعادة";btn.addEventListener("click",async()=>{if(!confirm("تحذير: ستُستبدل قاعدة البيانات الحالية بهذه النسخة. هل تريد المتابعة؟"))return;try{const rr=await fetch("/api/restore/"+encodeURIComponent(b.name),{method:"POST"});const x=await rr.json();alert(x.message||x.error||"انتهت العملية");if(rr.ok)location.reload();}catch(e){alert("فشل الاتصال: "+e.message);}});td2.appendChild(btn);tr.appendChild(td2);tbody.appendChild(tr);}); } catch(e) { tbody.textContent="خطأ في تحميل النسخ: "+e.message; } }
-
-async function restoreExternalBackup() { const input=document.getElementById("external-backup-file"); const status=document.getElementById("external-restore-status"); const file=input.files&&input.files[0]; if(!file){alert("اختر ملف النسخة الاحتياطية أولاً");return;} if(file.size>10*1024*1024){alert("حجم الملف أكبر من الحد المسموح 10 ميجابايت");return;} if(!confirm("تحذير مهم: ستُستبدل قاعدة البيانات الحالية بمحتويات الملف المختار، وستُنشأ نسخة أمان قبل الاستعادة. هل تريد المتابعة؟"))return; const data=new FormData(); data.append("file",file); status.textContent="جارٍ فحص الملف واستعادة النسخة..."; try { const r=await fetch("/api/restore-upload",{method:"POST",body:data}); const x=await r.json(); if(!r.ok)throw new Error(x.error||"فشلت الاستعادة"); status.textContent=x.message||"تمت الاستعادة بنجاح"; alert(status.textContent); location.reload(); } catch(e) { status.textContent="فشل الاستعادة: "+e.message; alert(status.textContent); } }
 async function loadBackupSettings() {
     try {
         const res = await fetch('/api/backup-settings');
@@ -491,7 +539,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => showSection(activeSection), 100);
     }
 });
-
 </script>
 
 
@@ -518,7 +565,6 @@ async function takeBackup() {
         if (msg) { msg.innerText = "❌ خطأ: " + e.message; msg.style.color = "red"; }
     }
 }
-
 </script>
 
 
@@ -543,7 +589,6 @@ async function loadSettingsData() {
 document.addEventListener('DOMContentLoaded', () => {
     loadSettingsData();
 });
-
 </script>
 
 
@@ -573,7 +618,6 @@ async function addWarehouse() {
         }
     } catch(e) { if (msg) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; } }
 }
-
 </script>
 
 
@@ -619,31 +663,10 @@ async function addActivity() {
         } else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
     } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
 }
-
 </script>
 
 
-<script>
-async function cashierRequest(url, options={}) { const opts={...options,headers:{"Content-Type":"application/json",...(options.headers||{})}}; const res=await fetch(url,opts); const d=await res.json(); if(!res.ok||!d.ok) throw new Error(d.error||"تعذر تنفيذ الطلب"); return d; }
-async function loadCashiers() { const body=document.getElementById("cashiersBody"); if(!body)return; try { const d=await cashierRequest("/api/cashiers"); const rows=d.cashiers||[]; body.innerHTML=rows.length?rows.map(c=>"<tr><td>"+c.id+"</td><td>"+(c.username||"")+"</td><td>"+(c.full_name||"")+"</td><td>"+(c.is_active?"نشط":"معطّل")+"</td><td><button type=\"button\" onclick=\"editCashier("+c.id+")\">تعديل</button> <button type=\"button\" onclick=\"toggleCashier("+c.id+")\">"+(c.is_active?"تعطيل":"تنشيط")+"</button> <button type=\"button\" onclick=\"deleteCashier("+c.id+")\">حذف</button></td></tr>").join(""):"<tr><td colspan=\"5\">لا يوجد كاشيرون</td></tr>"; } catch(e) { body.innerHTML="<tr><td colspan=\"5\">تعذر تحميل الكاشيرين: "+e.message+"</td></tr>"; } }
-function openCashierModal(){document.getElementById("cashierModalTitle").textContent="➕ إضافة كاشير";document.getElementById("cEditId").value="";document.getElementById("cUsername").value="";document.getElementById("cPassword").value="";document.getElementById("cFullName").value="";document.getElementById("cPhone").value="";document.getElementById("cPwNote").textContent="كلمة المرور مطلوبة للإضافة";const m=document.getElementById("cashierModal");document.body.appendChild(m);m.style.display="flex";}
-function hideCashierModal(){document.getElementById("cashierModal").style.display="none";}
-let cashierSaveInProgress=false; async function saveCashier(event){
-    if(event) event.preventDefault();
-    const btn = document.getElementById("btnSaveCashier");
-    if (btn) {
-        if (btn.disabled) return; // منع النقر المتكرر
-        btn.disabled = true;
-        setTimeout(() => { btn.disabled = false; }, 2000); // إعادة التفعيل بعد ثانيتين
-    }
-    if(cashierSaveInProgress) return;
-    cashierSaveInProgress = true;const saveBtn=document.getElementById("btnSaveCashier");if(saveBtn)saveBtn.disabled=true;try{await saveCashierInternal();}finally{cashierSaveInProgress=false;if(saveBtn)saveBtn.disabled=false;}} async function saveCashierInternal(){const id=document.getElementById("cEditId").value;const username=document.getElementById("cUsername").value.trim().toLowerCase();const password=document.getElementById("cPassword").value;const full_name=document.getElementById("cFullName").value.trim();const phone=document.getElementById("cPhone").value.trim();if(username.length<3)return alert("اسم المستخدم يجب أن يكون 3 أحرف على الأقل");if(!full_name)return alert("الاسم الكامل مطلوب");if((!id&&password.length<4)||(id&&password&&password.length<4))return alert("كلمة المرور يجب أن تكون 4 أحرف على الأقل");const payload={username,full_name,phone,permissions:{can_sell:true,can_open_session:true,can_hold_sale:true,can_cancel_draft:true,can_view_own_reports:true,can_apply_discount:false,max_discount_pct:0,can_view_stock:false,can_view_others_sessions:false}};if(password)payload.password=password;try{await cashierRequest(id?"/api/cashiers/"+id:"/api/cashiers",{method:id?"PUT":"POST",body:JSON.stringify(payload)});hideCashierModal();await loadCashiers();console.log("تم حفظ بيانات الكاشير (تم إخفاء التنبيه)");}catch(e){alert(e.message);}}
-async function editCashier(id){try{const d=await cashierRequest("/api/cashiers");const c=(d.cashiers||[]).find(x=>Number(x.id)===Number(id));if(!c)throw new Error("الكاشير غير موجود");document.getElementById("cashierModalTitle").textContent="تعديل الكاشير";document.getElementById("cEditId").value=c.id;document.getElementById("cUsername").value=c.username||"";document.getElementById("cPassword").value="";document.getElementById("cFullName").value=c.full_name||"";document.getElementById("cPhone").value=c.phone||"";document.getElementById("cPwNote").textContent="اترك كلمة المرور فارغة للإبقاء عليها";document.body.appendChild(document.getElementById("cashierModal"));document.getElementById("cashierModal").style.display="flex";}catch(e){alert(e.message);}}
-async function toggleCashier(id){if(!confirm("هل تريد تغيير حالة هذا الكاشير؟"))return;try{await cashierRequest("/api/cashiers/"+id+"/toggle",{method:"POST",body:JSON.stringify({})});await loadCashiers();}catch(e){alert(e.message);}}
-async function deleteCashier(id){if(!confirm("تأكيد حذف الكاشير؟ هذا الإجراء قد لا يمكن التراجع عنه."))return;try{await cashierRequest("/api/cashiers/"+id,{method:"DELETE"});await loadCashiers();}catch(e){alert(e.message);}}
-document.getElementById("btnAddCashier").addEventListener("click",openCashierModal);document.getElementById("btnCancelCashier").addEventListener("click",hideCashierModal);loadCashiers();
 
-</script>
 
 
 <script>
@@ -678,7 +701,6 @@ async function saveTaxSettings() {
         }
     } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
 }
-
 </script>
 
 
@@ -691,7 +713,6 @@ async function changeMyPassword() {
     
     if (!oldPass || !newPass) { msg.innerText = '❌ أدخل كلمتي المرور'; msg.style.color = 'red'; return; }
     if (newPass !== confirmPass) { msg.innerText = '❌ كلمتا المرور غير متطابقتين'; msg.style.color = 'red'; return; }
-    if (newPass.length < 8) { msg.innerText = '❌ كلمة المرور يجب أن تكون 8 أحرف على الأقل'; msg.style.color = 'red'; return; }
     
     msg.innerText = 'جارٍ التغيير...'; msg.style.color = 'yellow';
     
@@ -714,7 +735,6 @@ async function changeMyPassword() {
         }
     } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
 }
-
 </script>
 
 
@@ -765,7 +785,6 @@ async function savePermissions() {
         else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
     } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
 }
-
 </script>
 
 
@@ -826,7 +845,6 @@ async function addRegion() {
         } else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
     } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
 }
-
 </script>
 
 
@@ -870,7 +888,7 @@ async function loadServices() {
 async function addDeliveryService() {
     const name = document.getElementById('newServiceName').value.trim();
     const price = document.getElementById('newServicePrice').value;
-    if (!name) { alert('أدخل اسم المنطقة'); return; }
+    if (!name) { alert('أدخل اسم الخدمة'); return; }
     const res = await fetch('/api/delivery/service/add', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -880,7 +898,6 @@ async function addDeliveryService() {
     alert(d.message || d.error);
     if (d.ok) { document.getElementById('newServiceName').value = ''; document.getElementById('newServicePrice').value = ''; loadServices(); }
 }
-
 </script>
 
 {% endblock %}
