@@ -807,8 +807,8 @@ def api_partners_create():
     name = (d.get("name") or "").strip()
     partner_type = (d.get("partner_type") or "").strip()
 
-    if not code or not name:
-        return jsonify(error="كود الطرف واسم الطرف مطلوبان"), 400
+    if not name:
+        return jsonify(error="اسم الطرف مطلوب"), 400
 
     if partner_type not in ("customer", "supplier", "both"):
         return jsonify(error="نوع الطرف يجب أن يكون customer أو supplier أو both"), 400
@@ -820,6 +820,17 @@ def api_partners_create():
         return jsonify(error="لم يتم تهيئة الشركة المحاسبية"), 500
 
     company_id = company["id"]
+
+    if partner_type == "supplier" and not code:
+        last_code = db.query_one(
+            """SELECT MAX(CAST(SUBSTR(code, 5) AS INTEGER)) AS last_no
+               FROM business_partners
+               WHERE company_id=? AND partner_type IN (?,?)
+                 AND code LIKE ?""",
+            (company_id, "supplier", "both", "SUP-%"),
+        )
+        next_no = int((last_code or {}).get("last_no") or 0) + 1
+        code = "SUP-%06d" % next_no
 
     if db.query_one(
         "SELECT id FROM business_partners WHERE company_id=? AND code=?",
