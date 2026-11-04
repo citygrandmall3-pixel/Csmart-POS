@@ -117,6 +117,28 @@
         max-height: 60vh;
     }
 }
+
+/* زر الرجوع الموحد في جميع الصفحات */
+.global-back-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border: 1px solid rgba(128,128,128,.3);
+    border-radius: 9px;
+    background: var(--card, #fff);
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.global-back-button:hover {
+    background: rgba(79,140,255,.10);
+    border-color: #4f8cff;
+}
+
 </style>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/csmart.css') }}">
@@ -275,6 +297,7 @@
   <main class="main">
     <header class="topbar">
       <h2>{% block page_title %}{% endblock %}</h2>
+      <button type="button" class="global-back-button" id="global-back-button" aria-label="العودة إلى الصفحة السابقة">↩ رجوع</button>
       <div class="user-chip">
         <div style="font-weight:bold; font-size:16px; color:#fff; background:#0d6efd; padding:5px 12px; border-radius:8px;">👤 المستخدم الحالي: {{ user.full_name }} <span style="font-size:12px; color:#e0e0e0;">({{ role_name }})</span></div>
       </div>
@@ -432,6 +455,25 @@
     input.addEventListener('focus', function () {
         if (input.value.trim()) {
             performSearch();
+        }
+    });
+})();
+</script>
+
+
+<script>
+/* زر الرجوع الموحد: يرجع داخل النظام، وإلا يعود إلى لوحة التحكم */
+(function () {
+    const backButton = document.getElementById('global-back-button');
+    if (!backButton) return;
+    backButton.addEventListener('click', function () {
+        const referrer = document.referrer;
+        let sameOrigin = false;
+        try { sameOrigin = !!referrer && new URL(referrer).origin === window.location.origin; } catch (e) {}
+        if (sameOrigin && window.history.length > 1) {
+            window.history.back();
+        } else {
+            window.location.href = '/';
         }
     });
 })();
