@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block content %}
+{% set is_customer = partner_type == 'customer' %}
+{% set can_manage = user and user.role in ('admin', 'accountant') %}
+<style>
+.partner-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:14px 0}
+.partner-stat{background:var(--card-bg,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:14px}
+.partner-stat small{display:block;color:var(--muted,#64748b);margin-bottom:6px}
+.partner-stat strong{font-size:1.2rem}
+.partner-actions{display:flex;gap:6px;flex-wrap:wrap}
+.partner-modal.open{display:flex}
+.partner-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.48);z-index:9999;align-items:center;justify-content:center;padding:16px}
+.partner-modal-box{background:var(--card-bg,#fff);color:var(--text-color,inherit);width:min(980px,96vw);max-height:90vh;overflow:auto;border-radius:14px;padding:20px;box-shadow:0 18px 55px rgba(0,0,0,.22)}
+.partner-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}
+.partner-modal-head h2{margin:0}
+.partner-modal-close{font-size:22px;line-height:1;border:0;background:transparent;cursor:pointer}
+.partner-readonly{background:var(--input-bg,#f3f4f6);border:1px solid var(--border-color,#ddd);padding:10px;border-radius:8px;min-height:40px}
+.partner-statement-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:12px 0}
+.partner-statement-summary>div{border:1px solid var(--border-color,#ddd);border-radius:9px;padding:10px}
+.partner-statement-summary small{display:block;color:var(--muted,#64748b)}
+.partner-modal .table-wrap{overflow:auto}
+.partner-modal table{min-width:680px}
+.partner-empty{text-align:center;padding:24px;color:var(--muted,#64748b)}
+@media(max-width:700px){.partner-modal-box{padding:13px}.partner-actions .btn{padding:6px 9px}}
+/* Improve contrast inside partner modals without changing page theme */
+.partner-modal .partner-modal-box{
+  color:#1f2937 !important;
+  background:#ffffff !important;
+}
+.partner-modal .partner-modal-box h2,
+.partner-modal .partner-modal-box p,
+.partner-modal .partner-modal-box label,
+.partner-modal .partner-modal-box small,
+.partner-modal .partner-modal-box strong,
+.partner-modal .partner-modal-close{
+  color:#1f2937 !important;
+}
+.partner-modal .partner-modal-box input:not([type="checkbox"]):not([type="radio"]),
+.partner-modal .partner-modal-box select,
+.partner-modal .partner-modal-box textarea{
+  color:#111827 !important;
+  background:#ffffff !important;
+  border:1px solid #cbd5e1 !important;
+  opacity:1 !important;
+}
+.partner-modal .partner-modal-box input::placeholder,
+.partner-modal .partner-modal-box textarea::placeholder{
+  color:#6b7280 !important;
+  opacity:1 !important;
+}
+.partner-modal .partner-modal-box select option{
+  color:#111827 !important;
+  background:#ffffff !important;
+}
+.partner-modal .partner-modal-box input[type="date"]{
+  color-scheme:light;
+}
+.partner-modal .partner-modal-box .partner-readonly,
+.partner-modal .partner-modal-box .partner-statement-summary>div{
+  color:#1f2937 !important;
+}
+</style>
+
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p>{{ page_subtitle }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <input id="searchInput" type="text" placeholder="بحث بالاسم أو الكود أو الهاتف أو الرقم الضريبي..." oninput="loadPartners()" style="min-width:260px;flex:1">
+    {% if can_manage %}<button class="btn btn-primary" type="button" onclick="openForm()">+ {{ add_label }}</button>{% endif %}
+  </div>
+  <div class="partner-summary">
+    <div class="partner-stat"><small>عدد {{ page_title }}</small><strong id="statCount">—</strong></div>
+    <div class="partner-stat"><small>{% if is_customer %}إجمالي أرصدة العملاء المدينة{% else %}إجمالي أرصدة الموردين الدائنة{% endif %}</small><strong id="statBalance">—</strong></div>
+    {% if is_customer %}<div class="partner-stat"><small>إجمالي حدود الائتمان</small><strong id="statCredit">—</strong></div>{% else %}<div class="partner-stat"><small>الموردون ذوو الأرصدة المستحقة</small><strong id="statDueCount">—</strong></div>{% endif %}
+  </div>
+</div>
+
+<div class="card" id="partnerFormCard" style="display:none">
+  <h2 id="formTitle">{{ add_label }}</h2>
+  <form id="partnerForm" onsubmit="savePartner(event)">
+    <input type="hidden" id="partnerId">
+    <input type="hidden" id="partnerType" value="{{ partner_type }}">
+    <div class="form-grid">
+      <div><label>الكود *</label><input id="code" required maxlength="50"></div>
+      <div><label>الاسم *</label><input id="name" required maxlength="180"></div>
+      <div><label>الهاتف</label><input id="phone" maxlength="50"></div>
+      <div><label>البريد الإلكتروني</label><input id="email" type="email" maxlength="180"></div>
+      <div><label>الرقم الضريبي</label><input id="taxNo" maxlength="80"></div>
+      {% if is_customer %}
+      <div><label>حد الائتمان</label><input id="creditLimit" type="number" min="0" step="0.01" value="0"></div>
+      {% else %}
+      <input id="creditLimit" type="hidden" value="0">
+      {% endif %}
+      <div><label>الحساب المحاسبي المرتبط</label><div class="partner-readonly">{{ account_no }} - {{ account_label }}</div></div>
+      <div><label>الحالة</label><select id="isActive"><option value="1">نشط</option><option value="0">غير نشط</option></select></div>
+      <div class="full"><label>العنوان</label><textarea id="address" rows="2"></textarea></div>
+      <div class="full"><label>ملاحظات</label><textarea id="notes" rows="2"></textarea></div>
+    </div>
+    <div class="form-actions">
+      {% if can_manage %}<button class="btn btn-primary" type="submit">حفظ البيانات</button>{% endif %}
+      <button class="btn" type="button" onclick="closeForm()">إلغاء</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>الكود</th><th>الاسم</th><th>الهاتف</th><th>الرقم الضريبي</th>
+        <th>الحساب</th>
+        {% if is_customer %}<th>حد الائتمان</th><th>المتاح</th>{% endif %}
+        <th>الرصيد</th><th>الحالة</th><th>الإجراءات</th>
+      </tr></thead>
+      <tbody id="partnersTable"><tr><td colspan="{{ 11 if is_customer else 9 }}" class="partner-empty">جاري تحميل البيانات...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="partner-modal" id="statementModal" role="dialog" aria-modal="true" aria-labelledby="statementTitle">
+  <div class="partner-modal-box">
+    <div class="partner-modal-head"><h2 id="statementTitle">كشف الحساب</h2><button class="partner-modal-close" type="button" onclick="closeModal('statementModal')">×</button></div>
+    <div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <div><label>من تاريخ</label><input type="date" id="statementFrom"></div>
+      <div><label>إلى تاريخ</label><input type="date" id="statementTo"></div>
+      <button class="btn btn-primary" type="button" onclick="loadStatement()">عرض الكشف</button>
+      <button class="btn" type="button" onclick="printStatement()">طباعة</button>
+    </div>
+    <div class="partner-statement-summary" id="statementSummary"></div>
+    <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>رقم الحركة</th><th>البيان</th><th>الحساب المقابل</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody id="statementRows"><tr><td colspan="7" class="partner-empty">اختر الطرف لعرض كشف الحساب.</td></tr></tbody></table></div>
+  </div>
+</div>
+
+<div class="partner-modal" id="settlementModal" role="dialog" aria-modal="true" aria-labelledby="settlementTitle">
+  <div class="partner-modal-box" style="max-width:620px">
+    <div class="partner-modal-head"><h2 id="settlementTitle">تسوية الحساب</h2><button class="partner-modal-close" type="button" onclick="closeModal('settlementModal')">×</button></div>
+    <p id="settlementPartnerName"></p>
+    <div class="partner-statement-summary"><div><small>الرصيد المستحق قبل التسوية</small><strong id="settlementOutstanding">—</strong></div></div>
+    <form id="settlementForm" onsubmit="saveSettlement(event)">
+      <div class="form-grid">
+        <div><label>تاريخ التسوية *</label><input type="date" id="settlementDate" value="{{ today }}" required></div>
+        <div><label>المبلغ *</label><input type="number" id="settlementAmount" min="0.01" step="0.01" required></div>
+        <div class="full"><label>{% if is_customer %}حساب استلام المبلغ (صندوق / بنك) *{% else %}حساب دفع المبلغ (صندوق / بنك) *{% endif %}</label><select id="settlementAccount" required><option value="">جاري تحميل الحسابات...</option></select></div>
+        <div class="full"><label>البيان</label><input id="settlementDescription" maxlength="240" placeholder="وصف التسوية"></div>
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" id="settlementSubmit" type="submit">تأكيد التسوية وترحيل القيد</button><button class="btn" type="button" onclick="closeModal('settlementModal')">إلغاء</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+const PAGE_TYPE = {{ partner_type|tojson }};
+const IS_CUSTOMER = PAGE_TYPE === "customer";
+let partners = [];
+let activePartnerId = null;
+let statementPartnerId = null;
+let settlementPartnerId = null;
+let settlementAccounts = null;
+let latestStatement = null;
+
+function esc(value){if(value===null||value===undefined)return "";return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;");}
+function money(value){return Number(value||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function notify(message){if(typeof window.showAppNotification==="function")window.showAppNotification(message);else alert(message);}
+function openModal(id){document.getElementById(id).style.display="flex";}
+function closeModal(id){document.getElementById(id).style.display="none";}
+function currentBalance(p){return Number(IS_CUSTOMER?p.customer_balance:p.supplier_balance)||0;}
+function balanceLabel(value){const n=Number(value||0);if(Math.abs(n)<0.005)return "0.00";const debit=(IS_CUSTOMER&&n>0)||(!IS_CUSTOMER&&n<0);return `${money(Math.abs(n))} ${debit?"مدين":"دائن"}`;}
+
+async function loadPartners(){
+  const q=document.getElementById("searchInput").value.trim();
+  const params=new URLSearchParams({type:PAGE_TYPE});if(q)params.set("q",q);
+  const tbody=document.getElementById("partnersTable");
+  try{
+    const response=await fetch("/api/partners?"+params.toString());
+    const data=await response.json();if(!response.ok)throw new Error(data.error||"تعذر تحميل البيانات");
+    partners=data.partners||[];renderPartners();
+  }catch(error){tbody.innerHTML=`<tr><td colspan="${IS_CUSTOMER?11:9}" class="partner-empty">${esc(error.message)}</td></tr>`;}
+}
+
+function renderPartners(){
+  const tbody=document.getElementById("partnersTable");
+  const totalBalance=partners.reduce((sum,p)=>sum+Math.max(0,currentBalance(p)),0);
+  document.getElementById("statCount").textContent=partners.length;
+  document.getElementById("statBalance").textContent=money(totalBalance);
+  if(IS_CUSTOMER){document.getElementById("statCredit").textContent=money(partners.reduce((sum,p)=>sum+Number(p.credit_limit||0),0));}
+  else{document.getElementById("statDueCount").textContent=partners.filter(p=>currentBalance(p)>0.004).length;}
+  if(!partners.length){tbody.innerHTML=`<tr><td colspan="${IS_CUSTOMER?11:9}" class="partner-empty">لا توجد ${IS_CUSTOMER?"عملاء":"موردون"} مسجلون في هذا السجل.</td></tr>`;return;}
+  tbody.innerHTML=partners.map((p,i)=>{
+    const balance=currentBalance(p);const due=Math.max(0,balance);const active=Number(p.is_active)===1;
+    const acct=IS_CUSTOMER?`${esc(p.receivable_account_no||"-")} - ${esc(p.receivable_account_name||"")}`:`${esc(p.payable_account_no||"-")} - ${esc(p.payable_account_name||"")}`;
+    const kind=p.partner_type==="both"?` <small>(سجل مشترك قديم)</small>`:"";
+    const credit=Number(p.credit_limit||0);const available=credit>0?(due>credit?`<span style="color:#b91c1c;font-weight:700">متجاوز بمقدار ${money(due-credit)}</span>`:money(credit-due)):"—";const creditHtml=IS_CUSTOMER?`<td>${credit>0?money(credit):"غير محدد"}</td><td>${credit>0?available:"غير محدد"}</td>`:"";
+    return `<tr><td>${i+1}</td><td>${esc(p.code)}</td><td><strong>${esc(p.name)}</strong>${kind}</td><td>${esc(p.phone||"-")}</td><td>${esc(p.tax_no||"-")}</td><td>${acct}</td>${creditHtml}<td><strong>${balanceLabel(balance)}</strong></td><td>${active?"نشط":"غير نشط"}</td><td><div class="partner-actions"><button class="btn" type="button" onclick="openStatement(${p.id})">كشف الحساب</button>{% if can_manage %}<button class="btn btn-primary" type="button" onclick="openSettlement(${p.id})" ${due<=0.004?"disabled":""}>تسوية</button><button class="btn" type="button" onclick="editPartner(${p.id})">تعديل</button><button class="btn btn-danger" type="button" onclick="deletePartner(${p.id})">حذف</button>{% endif %}</div></td></tr>`;
+  }).join("");
+}
+
+function openForm(partner=null){
+  document.getElementById("partnerFormCard").style.display="block";
+  document.getElementById("partnerForm").reset();
+  document.getElementById("partnerId").value="";
+  document.getElementById("partnerType").value=PAGE_TYPE;
+  document.getElementById("creditLimit").value="0";
+  document.getElementById("isActive").value="1";
+  document.getElementById("formTitle").textContent=partner?"تعديل البيانات":`{{ add_label }}`;
+  if(partner){
+    document.getElementById("partnerId").value=partner.id;
+    document.getElementById("partnerType").value=partner.partner_type||PAGE_TYPE;
+    document.getElementById("code").value=partner.code||"";
+    document.getElementById("name").value=partner.name||"";
+    document.getElementById("phone").value=partner.phone||"";
+    document.getElementById("email").value=partner.email||"";
+    document.getElementById("taxNo").value=partner.tax_no||"";
+    document.getElementById("creditLimit").value=partner.credit_limit||0;
+    document.getElementById("isActive").value=Number(partner.is_active)===1?"1":"0";
+    document.getElementById("address").value=partner.address||"";
+    document.getElementById("notes").value=partner.notes||"";
+  }
+  document.getElementById("partnerFormCard").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function closeForm(){document.getElementById("partnerFormCard").style.display="none";document.getElementById("partnerForm").reset();document.getElementById("partnerId").value="";}
+function editPartner(id){const p=partners.find(x=>Number(x.id)===Number(id));if(p)openForm(p);}
+
+async function savePartner(event){
+  event.preventDefault();
+  const id=document.getElementById("partnerId").value.trim();
+  const data={code:document.getElementById("code").value.trim(),name:document.getElementById("name").value.trim(),partner_type:document.getElementById("partnerType").value,phone:document.getElementById("phone").value.trim(),email:document.getElementById("email").value.trim(),tax_no:document.getElementById("taxNo").value.trim(),credit_limit:Number(document.getElementById("creditLimit").value||0),is_active:document.getElementById("isActive").value==="1",address:document.getElementById("address").value.trim(),notes:document.getElementById("notes").value.trim()};
+  const response=await fetch(id?`/api/partners/${id}`:"/api/partners",{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  const result=await response.json();if(!response.ok){notify(result.error||"تعذر حفظ البيانات");return;}
+  closeForm();notify(id?"تم تعديل البيانات بنجاح":"تمت إضافة السجل بنجاح");await loadPartners();
+}
+
+async function deletePartner(id){
+  const p=partners.find(x=>Number(x.id)===Number(id));if(!p)return;
+  if(!confirm(`هل أنت متأكد من حذف ${p.name}؟ سيتم منع الحذف إذا كان مرتبطًا بحركات محاسبية.`))return;
+  const response=await fetch(`/api/partners/${id}`,{method:"DELETE"});const result=await response.json();
+  if(!response.ok){notify(result.error||"تعذر حذف السجل");return;}notify("تم الحذف بنجاح");await loadPartners();
+}
+
+function openStatement(id){statementPartnerId=id;document.getElementById("statementFrom").value="";document.getElementById("statementTo").value="";document.getElementById("statementRows").innerHTML=`<tr><td colspan="7" class="partner-empty">جاري تحميل الكشف...</td></tr>`;openModal("statementModal");loadStatement();}
+async function loadStatement(){
+  if(!statementPartnerId)return;const p=partners.find(x=>Number(x.id)===Number(statementPartnerId));
+  const params=new URLSearchParams({type:PAGE_TYPE});const from=document.getElementById("statementFrom").value;const to=document.getElementById("statementTo").value;if(from)params.set("from",from);if(to)params.set("to",to);
+  const response=await fetch(`/api/partners/${statementPartnerId}/statement?${params.toString()}`);const data=await response.json();if(!response.ok){notify(data.error||"تعذر تحميل كشف الحساب");return;}
+  latestStatement=data;document.getElementById("statementTitle").textContent=`كشف حساب ${data.partner.name}`;
+  const s=data.summary;document.getElementById("statementSummary").innerHTML=`<div><small>الرصيد الافتتاحي</small><strong>${balanceLabel(s.opening_balance)}</strong></div><div><small>إجمالي المدين</small><strong>${money(s.debit)}</strong></div><div><small>إجمالي الدائن</small><strong>${money(s.credit)}</strong></div><div><small>الرصيد الختامي</small><strong>${balanceLabel(s.closing_balance)}</strong></div>`;
+  const rows=data.entries||[];document.getElementById("statementRows").innerHTML=rows.length?rows.map(r=>`<tr><td>${esc(r.entry_date)}</td><td>${esc(r.movement_no)}</td><td>${esc(r.description)}</td><td>${esc((r.acc_no||"")+" "+(r.account_name||""))}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${balanceLabel(r.balance)}</td></tr>`).join(""):`<tr><td colspan="7" class="partner-empty">لا توجد حركات خلال الفترة المحددة.</td></tr>`;
+}
+function printStatement(){if(!latestStatement)return;const content=document.querySelector("#statementModal .partner-modal-box").innerHTML;const w=window.open("","_blank");if(!w){notify("اسمح بفتح نافذة الطباعة");return;}w.document.write(`<html dir="rtl"><head><title>كشف حساب</title><style>body{font-family:Arial;padding:20px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #bbb;padding:7px;text-align:right}button,input{display:none}</style></head><body>${content}</body></html>`);w.document.close();w.print();}
+
+async function loadSettlementAccounts(){
+  if(settlementAccounts)return settlementAccounts;
+  const response=await fetch("/api/partner-settlement-accounts");const data=await response.json();if(!response.ok)throw new Error(data.error||"تعذر تحميل حسابات الصندوق والبنوك");settlementAccounts=data.accounts||[];
+  document.getElementById("settlementAccount").innerHTML=settlementAccounts.length?`<option value="">اختر الحساب</option>`+settlementAccounts.map(a=>`<option value="${a.id}">${esc(a.acc_no)} - ${esc(a.name)}</option>`).join(""):`<option value="">لا توجد حسابات صندوق أو بنك نشطة</option>`;
+  return settlementAccounts;
+}
+async function openSettlement(id){
+  const p=partners.find(x=>Number(x.id)===Number(id));if(!p)return;settlementPartnerId=id;const outstanding=Math.max(0,currentBalance(p));
+  document.getElementById("settlementPartnerName").textContent=`${p.code} - ${p.name}`;
+  document.getElementById("settlementOutstanding").textContent=money(outstanding);
+  document.getElementById("settlementAmount").value="";document.getElementById("settlementAmount").max=outstanding.toFixed(2);
+  document.getElementById("settlementDate").value="{{ today }}";document.getElementById("settlementDescription").value="";
+  document.getElementById("settlementTitle").textContent=IS_CUSTOMER?"تحصيل / تسوية حساب العميل":"سداد / تسوية حساب المورد";
+  openModal("settlementModal");try{const accounts=await loadSettlementAccounts();document.getElementById("settlementSubmit").disabled=!accounts.length||outstanding<=0.004;}catch(error){notify(error.message);document.getElementById("settlementSubmit").disabled=true;}
+}
+async function saveSettlement(event){
+  event.preventDefault();if(!settlementPartnerId)return;
+  const amount=Number(document.getElementById("settlementAmount").value||0);const max=Number(document.getElementById("settlementAmount").max||0);
+  if(amount<=0||amount>max+0.004){notify("المبلغ يجب أن يكون أكبر من صفر وألا يتجاوز الرصيد المستحق");return;}
+  const button=document.getElementById("settlementSubmit");button.disabled=true;
+  try{
+    const response=await fetch(`/api/partners/${settlementPartnerId}/settlement`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({partner_type:PAGE_TYPE,amount,cash_account_id:document.getElementById("settlementAccount").value,entry_date:document.getElementById("settlementDate").value,description:document.getElementById("settlementDescription").value.trim()})});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||"تعذر تسجيل التسوية");
+    closeModal("settlementModal");notify(`تم تسجيل التسوية وترحيل القيد رقم ${result.movement_no}`);await loadPartners();
+  }catch(error){notify(error.message);}finally{button.disabled=false;}
+}
+
+loadPartners();
+</script>
+{% endblock %}
