@@ -528,20 +528,8 @@
             </div>
 
 
-            <!-- سعر الصرف -->
-            <div>
-                <label for="exchange_rate">
-                    سعر الصرف مقابل الدولار
-                </label>
-
-                <input
-                    type="number"
-                    id="exchange_rate"
-                    value="1"
-                    min="0.000001"
-                    step="any"
-                    required>
-            </div>
+            <!-- حقل داخلي للحفاظ على توافق الحسابات الحالية -->
+            <input type="hidden" id="exchange_rate" value="1">
 
 
             <!-- طريقة الدفع -->
