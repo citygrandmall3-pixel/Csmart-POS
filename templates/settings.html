@@ -1,0 +1,903 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display: flex; gap: 20px; min-height: 80vh;">
+
+    <!-- القائمة الجانبية (يمين) -->
+    <div style="flex: 0 0 250px; background: #2a2a40; border-radius: 10px; padding: 15px; height: fit-content;">
+        <h3 style="margin-top: 0; color: #ffc107; border-bottom: 2px solid #444; padding-bottom: 10px;">⚙️ أقسام الإعدادات</h3>
+        <ul style="list-style: none; padding: 0; margin: 0;">
+            <li><a href="#" onclick="showSection('general')" class="settings-link active">🏠 عام</a></li>
+            <li><a href="#" onclick="showSection('invoice')" class="settings-link">🧾 الفاتورة والطباعة</a></li>
+            <li><a href="#" onclick="showSection('backup')" class="settings-link">💾 النسخ الاحتياطي</a></li>
+            <li><a href="#" onclick="showSection('users')" class="settings-link">👥 المستخدمين</a></li>
+            <li><a href="#" onclick="showSection('cashiers')" class="settings-link">👤 إعداد الكاشير</a></li>
+            <li><a href="#" onclick="showSection('tax')" class="settings-link">💰 ضريبة المبيعات</a></li>
+            <li><a href="#" onclick="showSection('signatures')" class="settings-link">✍️ التواقيع</a></li>
+            <li><a href="#" onclick="showSection('permissions')" class="settings-link">🛡️ الصلاحيات</a></li>
+            <li><a href="#" onclick="showSection('my_password')" class="settings-link">🔑 تغيير كلمة المرور</a></li>
+            <li><a href="#" onclick="showSection('regions')" class="settings-link">🗺️ المناطق والفروع</a></li>
+            <li><a href="#" onclick="showSection('about')" class="settings-link">ℹ️ عن السيستم</a></li>
+            
+            
+            <li>
+                <a href="#" onclick="toggleSubmenu('advanced-menu', event)" class="settings-link" style="display: flex; justify-content: space-between; align-items: center;">
+                    ⚙️ إعدادات متقدمة
+                    <span id="advanced-arrow" style="font-size: 12px;">▼</span>
+                </a>
+                <ul id="advanced-menu" style="display: none; list-style: none; padding-right: 20px; margin-top: 5px;">
+                    <li><a href="#" onclick="showSection('warehouses')" class="settings-link" style="font-size: 13px;">📦 المخازن</a></li>
+                    <li><a href="#" onclick="showSection('delivery_settings')" class="settings-link" style="font-size: 13px;">🚚 إعدادات التوصيل</a></li>
+                    <li><a href="#" onclick="showSection('currencies')" class="settings-link" style="font-size: 13px;">💰 العملات</a></li>
+                    <li><a href="#" onclick="showSection('activities')" class="settings-link" style="font-size: 13px;">📊 الأنشطة</a></li>
+                    <li><a href="/products" class="settings-link" style="font-size: 13px;">📱 المنتجات</a></li>
+                    <li><a href="/product-categories" class="settings-link" style="font-size: 13px;">📁 تصنيفات المنتجات</a></li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+    <!-- المحتوى (يسار) -->
+    <div style="flex: 1; background: #2a2a40; border-radius: 10px; padding: 20px;">
+        
+        <!-- قسم عام -->
+        <div id="section-general" class="settings-section">
+            <h2>🏠 الإعدادات العامة</h2>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div><label>اسم الشركة:</label><input type="text" id="gen-name" style="width:100%; padding:8px;" placeholder="الشركة الرئيسية"></div>
+                <div><label>الهاتف:</label><input type="text" id="gen-phone" style="width:100%; padding:8px;" placeholder="01xxxxxxxxx"></div>
+                <div><label>العنوان:</label><input type="text" id="gen-address" style="width:100%; padding:8px;" placeholder="العنوان"></div>
+                <div><label>الرقم الضريبي:</label><input type="text" id="gen-tax" style="width:100%; padding:8px;" placeholder="Tax No"></div>
+            </div>
+            <div style="margin-top:15px;"><button class="btn btn-gold" onclick="saveGeneralSettings()">💾 حفظ الإعدادات العامة</button><span id="gen-settings-msg" style="margin-right:10px;"></span></div>
+        </div>
+
+        <!-- قسم الفاتورة -->
+        <div id="section-invoice" class="settings-section" style="display:none;">
+            <h2>🧾 إعدادات الفاتورة والطباعة</h2>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div><label>حجم الورق:</label><select id="inv-paper-size" style="width:100%; padding:8px;"><option value="A4">A4</option><option value="80mm">80mm</option><option value="58mm">58mm</option></select></div>
+                <div><label>حجم الخط:</label><select id="inv-font-size" style="width:100%; padding:8px;"><option value="small">صغير</option><option value="medium" selected>متوسط</option><option value="large">كبير</option></select></div>
+                <div><label>محاذاة الترويسة:</label><select id="inv-align" style="width:100%; padding:8px;"><option value="center">توسيط</option><option value="right">يمين</option><option value="left">يسار</option></select></div>
+                <div><label>إظهار الكاشير:</label><select id="inv-show-cashier" style="width:100%; padding:8px;"><option value="1">نعم</option><option value="0">لا</option></select></div>
+                <div><label>إظهار الرقم الضريبي:</label><select id="inv-show-tax" style="width:100%; padding:8px;"><option value="0">لا</option><option value="1">نعم</option></select></div>
+                <div><label>عدد النسخ:</label><input type="number" id="inv-copies" value="1" min="1" max="5" style="width:100%; padding:8px;"></div>
+            </div>
+            <div style="margin-top:15px;"><label>رسالة أسفل الفاتورة:</label><input type="text" id="inv-footer-msg" placeholder="شكراً لتعاملكم" style="width:100%; padding:8px;"></div>
+            <div style="margin-top:15px;"><button class="btn btn-gold" onclick="saveInvoiceSettings()">💾 حفظ إعدادات الفاتورة</button><span id="inv-settings-msg" style="margin-right:10px;"></span></div>
+        </div>
+
+        <!-- قسم النسخ الاحتياطي -->
+        <div id="section-backup" class="settings-section" style="display:none;">
+            <h2>💾 إعدادات النسخ الاحتياطي</h2>
+            
+            <div class="card" style="margin-bottom:15px;">
+                <h3>📧 البريد الإلكتروني</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div><label>تفعيل البريد:</label><select id="bs-email-enabled" style="width:100%; padding:8px;"><option value="1">نعم</option><option value="0">لا</option></select></div>
+                    <div><label>البريد المستقبل:</label><input type="email" id="bs-email-to" style="width:100%; padding:8px;" placeholder="email@example.com"></div>
+                    <div><label>عند إغلاق الوردية:</label><select id="bs-session-close" style="width:100%; padding:8px;"><option value="1">نعم</option><option value="0">لا</option></select></div>
+                    <div><label>كل 24 ساعة:</label><select id="bs-daily" style="width:100%; padding:8px;"><option value="1">نعم</option><option value="0">لا</option></select></div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom:15px;">
+                <h3>📁 النسخ المحلي</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div><label>تفعيل النسخ المحلي:</label><select id="bs-local-enabled" style="width:100%; padding:8px;"><option value="1">نعم</option><option value="0">لا</option></select></div>
+                    <div><label>المسار:</label><input type="text" id="bs-local-path" style="width:100%; padding:8px;" placeholder="/storage/emulated/0/Backups"></div>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button class="btn btn-gold" onclick="saveBackupSettings()">💾 حفظ الإعدادات</button>
+                <button class="btn btn-teal" onclick="testEmailBackup()">📧 اختبار البريد</button>
+                <button class="btn btn-primary" onclick="takeBackup()">💾 أخذ نسخة احتياطية الآن</button>
+                <a href="/backups" class="btn btn-secondary" style="background:#17a2b8; color:white; padding:8px 15px; text-decoration:none; border-radius:5px;">📋 عرض قائمة النسخ</a>
+            </div>
+            <div id="bs-status" style="margin-top:10px; font-weight:bold;"></div>
+
+            <hr style="margin:20px 0;">
+            <h3>📋 النسخ الاحتياطية المتاحة</h3>
+            <table id="backupsTable" style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>اسم النسخة</th><th>التاريخ</th><th>الحجم</th><th>تنزيل</th></tr></thead>
+                <tbody id="backups-body">
+                    {% if backups_list %}
+                        {% for b in backups_list %}
+                            <tr>
+                                <td style="padding:5px; border:1px solid #444;">{{ b.name }}</td>
+                                <td style="padding:5px; border:1px solid #444;">{{ b.modified }}</td>
+                                <td style="padding:5px; border:1px solid #444;">{{ b.size }} bytes</td>
+                                <td style="padding:5px; border:1px solid #444;"><a href="/api/backups/{{ b.name }}" class="btn btn-sm btn-teal">⬇️ تنزيل</a></td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="4">لا توجد نسخ احتياطية</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- قسم المستخدمين -->
+        <div id="section-users" class="settings-section" style="display:none;">
+            <h2>👥 إدارة المستخدمين</h2>
+            <p>يمكنك إدارة المستخدمين من خلال صفحة <a href="/users" style="color:#ffc107;">المستخدمين</a>.</p>
+        </div>
+
+        
+        <div id="section-cashiers" class="settings-section" style="display:none;">
+  <h2>👤 إدارة الكاشيرين</h2>
+  <p>إدارة حسابات الكاشيرين والصلاحيات المسموح بها أثناء الوردية.</p>
+  <button type="button" id="btnAddCashier" class="btn btn-gold">➕ إضافة كاشير جديد</button>
+  <div style="margin-top:12px;overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="cashiersBody"><tr><td colspan="5">جاري التحميل...</td></tr></tbody></table></div>
+</div>
+<div id="cashierModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999999;align-items:center;justify-content:center;padding:16px;overflow:auto;">
+  <div style="background:#fff;color:#222;border-radius:12px;padding:20px;max-width:680px;width:100%;max-height:94vh;overflow:auto;">
+    <h3 id="cashierModalTitle">إضافة كاشير</h3>
+    <input type="hidden" id="cEditId">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      <div class="field"><label for="cUsername">اسم المستخدم</label><input id="cUsername" autocomplete="off"></div>
+      <div class="field"><label for="cPassword">كلمة المرور</label><input id="cPassword" type="password" autocomplete="new-password"><span id="cPwNote"></span></div>
+      <div class="field"><label for="cFullName">الاسم الكامل</label><input id="cFullName"></div>
+      <div class="field"><label for="cPhone">الهاتف</label><input id="cPhone"></div>
+    </div>
+    <fieldset style="border:1px solid #ddd;border-radius:9px;padding:12px;margin:14px 0">
+      <legend style="font-weight:bold;padding:0 7px">صلاحيات الكاشير</legend>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">
+        <label><input type="checkbox" id="cPermCanSell"> إنشاء وتعديل واعتماد المبيعات</label>
+        <label><input type="checkbox" id="cPermOpenSession"> فتح الوردية</label>
+        <label><input type="checkbox" id="cPermHoldSale"> تعليق واستئناف الفواتير</label>
+        <label><input type="checkbox" id="cPermCancelDraft"> إلغاء المسودات</label>
+        <label><input type="checkbox" id="cPermOwnReports"> عرض سجل فواتيره وتقارير ورديته</label>
+        <label><input type="checkbox" id="cPermDiscount"> تطبيق الخصومات</label>
+        <label><input type="checkbox" id="cPermViewStock"> عرض كميات المخزون وتفاصيله</label>
+        <label><input type="checkbox" id="cPermOtherSessions"> عرض ورديات الآخرين</label>
+      </div>
+      <div style="margin-top:12px;max-width:260px"><label for="cPermMaxDiscountPct">الحد الأقصى للخصم (%)</label><input id="cPermMaxDiscountPct" type="number" min="0" max="100" step="0.5" value="0" style="width:100%"></div>
+      <small style="display:block;color:#666;margin-top:8px">يُطبّق الحد على الخصم الإجمالي للفاتورة أو الأصناف. تفعيل الخصم وحده لا يسمح بتجاوز النسبة المحددة.</small>
+    </fieldset>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="btnSaveCashier" class="btn btn-gold">💾 حفظ</button><button type="button" id="btnCancelCashier" class="btn btn-dark">إلغاء</button></div>
+  </div>
+</div>
+<div id="section-tax" class="settings-section" style="display:none;">
+            <h2>💰 إعدادات ضريبة المبيعات</h2>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:15px;">
+                <div>
+                    <label>تفعيل الضريبة:</label>
+                    <select id="tax-enabled" style="width:100%; padding:8px; border-radius:5px;">
+                        <option value="0">لا</option>
+                        <option value="1">نعم</option>
+                    </select>
+                </div>
+                <div>
+                    <label>نسبة الضريبة (%):</label>
+                    <input type="number" id="tax-rate" step="0.01" min="0" max="100" value="0" style="width:100%; padding:8px; border-radius:5px;">
+                </div>
+            </div>
+            <div style="margin-top:15px;">
+                <button class="btn btn-gold" onclick="saveTaxSettings()">💾 حفظ إعدادات الضريبة</button>
+                <span id="tax-msg" style="margin-right:10px; font-weight:bold;"></span>
+            </div>
+        </div>
+        <div id="section-signatures" class="settings-section" style="display:none;">
+            <h2>✍️ التواقيع في التقارير</h2>
+            <div style="max-width:500px; margin-top:15px;">
+                <div style="margin-bottom:10px;">
+                    <label>اسم المدير (التوقيع):</label>
+                    <input type="text" id="sig-manager" style="width:100%; padding:8px; border-radius:5px;">
+                </div>
+                <div style="margin-bottom:15px;">
+                    <label>اسم المحاسب (التوقيع):</label>
+                    <input type="text" id="sig-accountant" style="width:100%; padding:8px; border-radius:5px;">
+                </div>
+                <button class="btn btn-gold" onclick="saveSignatures()">💾 حفظ التواقيع</button>
+                <span id="sig-msg" style="margin-right:10px; font-weight:bold;"></span>
+            </div>
+        </div>
+        <div id="section-permissions" class="settings-section" style="display:none;">
+            <h2>🛡️ صلاحيات المستخدمين (حسب الدور)</h2>
+            <p style="color:#aaa;">ملاحظة: المدير يملك كل الصلاحيات دائماً. هنا يمكنك تعديل صلاحيات المحاسب والكاشير.</p>
+            
+            <table style="width:100%; border-collapse:collapse; margin-top:15px;">
+                <thead>
+                    <tr style="background:#1e1e2f; color:#ffc107;">
+                        <th style="padding:10px; border:1px solid #444;">الصلاحية</th>
+                        <th style="padding:10px; border:1px solid #444;">المحاسب (Accountant)</th>
+                        <th style="padding:10px; border:1px solid #444;">الكاشير (Cashier)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding:8px; border:1px solid #444;">إضافة/تعديل المنتجات</td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_acc_products"></td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_cash_products" disabled></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px; border:1px solid #444;">حذف الفواتير</td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_acc_delete_inv"></td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_cash_delete_inv" disabled></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px; border:1px solid #444;">عرض التقارير المالية</td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_acc_reports"></td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_cash_reports"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:8px; border:1px solid #444;">تعديل الأسعار</td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_acc_prices"></td>
+                        <td style="text-align:center; border:1px solid #444;"><input type="checkbox" id="perm_cash_prices"></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="margin-top:15px;">
+                <button class="btn btn-gold" onclick="savePermissions()">💾 حفظ الصلاحيات</button>
+                <span id="perm-msg" style="margin-right:10px; font-weight:bold;"></span>
+            </div>
+        </div>
+        <div id="section-my_password" class="settings-section" style="display:none;">
+            <h2>🔑 تغيير كلمة المرور</h2>
+            <div style="max-width:400px; margin-top:15px;">
+                <div style="margin-bottom:10px;">
+                    <label>كلمة المرور الحالية:</label>
+                    <input type="password" id="oldPassword" style="width:100%; padding:8px; border-radius:5px;">
+                </div>
+                <div style="margin-bottom:10px;">
+                    <label>كلمة المرور الجديدة:</label>
+                    <input type="password" id="newPassword" style="width:100%; padding:8px; border-radius:5px;">
+                </div>
+                <div style="margin-bottom:15px;">
+                    <label>تأكيد كلمة المرور الجديدة:</label>
+                    <input type="password" id="confirmPassword" style="width:100%; padding:8px; border-radius:5px;">
+                </div>
+                <button class="btn btn-gold" onclick="changeMyPassword()">💾 تغيير كلمة المرور</button>
+                <span id="pw-msg" style="margin-right:10px; font-weight:bold;"></span>
+            </div>
+        </div>
+        <div id="section-regions" class="settings-section" style="display:none;">
+            <h2>🗺️ المناطق</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="newRegionName" placeholder="اسم المنطقة الجديدة" style="flex:1; padding:8px; border-radius:5px;">
+                <button class="btn btn-gold" onclick="addRegion()">➕ إضافة منطقة</button>
+            </div>
+            <div id="region-msg" style="margin-bottom:10px; font-weight:bold;"></div>
+            <table id="regionsTable" style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>اسم المنطقة</th></tr></thead>
+                <tbody><tr><td colspan="2">جاري التحميل...</td></tr></tbody>
+            </table>
+        </div>
+        <div id="section-about" class="settings-section" style="display:none;">
+            <h2>ℹ️ عن السيستم</h2>
+            <p>نظام المحاسبة ونقاط البيع - الإصدار 1.0</p>
+            <p>تم التطوير بواسطة: [اسمك]</p>
+        </div>
+
+<!-- قسم متقدم -->
+        <div id="section-advanced" class="settings-section" style="display:none;">
+            <h2>⚙️ إعدادات متقدمة</h2>
+            <p>هنا ستضع إعدادات المخازن، العملات، وغيرها.</p>
+            <div style="color: #aaa; padding: 20px; text-align: center; border: 1px dashed #444; border-radius: 8px;">
+                (قيد التطوير - قريباً)
+            </div>
+        </div>
+
+    
+        <div id="section-warehouses" class="settings-section" style="display:none;">
+            <h2>📦 إدارة المخازن</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="newWarehouseName" placeholder="اسم المخزن الجديد" style="flex:1; padding:8px; border-radius:5px;">
+                <button class="btn btn-gold" onclick="addWarehouse()">➕ إضافة مخزن</button>
+            </div>
+            <div id="warehouse-msg" style="margin-bottom:10px; font-weight:bold;"></div>
+            <table id="warehousesTable" style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>اسم المخزن</th></tr></thead>
+                <tbody><tr><td colspan="2">جاري التحميل...</td></tr></tbody>
+            </table>
+        </div>
+        <div id="section-currencies" class="settings-section" style="display:none;">
+            <h2>💰 إدارة العملات</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="newCurrencyCode" placeholder="كود العملة (مثل USD)" style="width:150px; padding:8px; border-radius:5px;">
+                <input type="text" id="newCurrencyName" placeholder="اسم العملة" style="flex:1; padding:8px; border-radius:5px;">
+                <button class="btn btn-gold" onclick="addCurrency()">➕ إضافة عملة</button>
+            </div>
+            <div id="currency-msg" style="margin-bottom:10px; font-weight:bold;"></div>
+            <table id="currenciesTable" style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>الكود</th><th>الاسم</th></tr></thead>
+                <tbody><tr><td colspan="3">جاري التحميل...</td></tr></tbody>
+            </table>
+        </div>
+        <div id="section-activities" class="settings-section" style="display:none;">
+            <h2>📊 إدارة الأنشطة</h2>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="newActivityName" placeholder="اسم النشاط الجديد" style="flex:1; padding:8px; border-radius:5px;">
+                <button class="btn btn-gold" onclick="addActivity()">➕ إضافة نشاط</button>
+            </div>
+            <div id="activity-msg" style="margin-bottom:10px; font-weight:bold;"></div>
+            <table id="activitiesTable" style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>اسم النشاط</th></tr></thead>
+                <tbody><tr><td colspan="2">جاري التحميل...</td></tr></tbody>
+            </table>
+        </div>
+
+
+        <div id="section-delivery_settings" class="settings-section" style="display:none;">
+            <h2>🚚 إعدادات التوصيل</h2>
+            
+            <div class="card" style="margin-bottom:20px;">
+                <h3>👤 السائقين</h3>
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <input type="text" id="newDriverName" placeholder="اسم السائق" style="flex:1; padding:8px;">
+                    <input type="text" id="newDriverPhone" placeholder="رقم الهاتف" style="flex:1; padding:8px;">
+                    <button class="btn btn-gold" onclick="addDriver()">➕ إضافة</button>
+                </div>
+                <table id="driversTable" style="width:100%; border-collapse:collapse;">
+                    <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>الاسم</th><th>الهاتف</th></tr></thead>
+                    <tbody><tr><td colspan="3">جاري التحميل...</td></tr></tbody>
+                </table>
+            </div>
+            
+            <div class="card">
+                <h3>🛵 خدمات التوصيل</h3>
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <input type="text" id="newServiceName" placeholder="اسم الخدمة (مثلاً: توصيل عادي)" style="flex:1; padding:8px;">
+                    <input type="number" id="newServicePrice" placeholder="السعر" style="width:120px; padding:8px;">
+                    <button class="btn btn-gold" onclick="addDeliveryService()">➕ إضافة</button>
+                </div>
+                <table id="servicesTable" style="width:100%; border-collapse:collapse;">
+                    <thead><tr style="background:#1e1e2f; color:#ffc107;"><th>#</th><th>الخدمة</th><th>السعر</th></tr></thead>
+                    <tbody><tr><td colspan="3">جاري التحميل...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+</div>
+</div>
+
+<style>
+    .settings-link { display: block; padding: 10px 15px; color: #ddd; text-decoration: none; border-radius: 5px; margin-bottom: 5px; transition: 0.3s; }
+    .settings-link:hover { background: #3a3a50; color: #fff; }
+    .settings-link.active { background: #0d6efd; color: #fff; }
+</style>
+
+<script>
+    
+    function toggleSubmenu(menuId, event) {
+        event.preventDefault();
+        const menu = document.getElementById(menuId);
+        const arrow = document.getElementById('advanced-arrow');
+        if (menu.style.display === 'none') {
+            menu.style.display = 'block';
+            if (arrow) arrow.innerText = '▲';
+        } else {
+            menu.style.display = 'none';
+            if (arrow) arrow.innerText = '▼';
+        }
+    }
+
+    function showSection(id) {
+        document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
+        document.querySelectorAll('.settings-link').forEach(l => l.classList.remove('active'));
+        document.getElementById('section-' + id).style.display = 'block';
+        event.target.classList.add('active');
+    }
+
+    async function saveInvoiceSettings() {
+        const payload = {
+            invoice_paper_size: document.getElementById("inv-paper-size").value,
+            invoice_font_size: document.getElementById("inv-font-size").value,
+            invoice_align: document.getElementById("inv-align").value,
+            invoice_show_cashier: document.getElementById("inv-show-cashier").value,
+            invoice_copies: document.getElementById("inv-copies").value,
+            invoice_footer_msg: document.getElementById("inv-footer-msg").value
+        };
+        try {
+            const res = await fetch("/api/invoice-settings", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const msg = document.getElementById("inv-settings-msg");
+            if (data.ok) { msg.innerText = "✅ تم الحفظ"; msg.style.color = "green"; }
+            else { msg.innerText = "❌ " + data.error; msg.style.color = "red"; }
+        } catch(e) { alert("خطأ: " + e.message); }
+    }
+// تم نقل إدارة الكاشير وربط أحداثها إلى static/js/cashiers.js
+</script>
+
+<script>
+async function loadBackupSettings() {
+    try {
+        const res = await fetch('/api/backup-settings');
+        const d = await res.json();
+        if (d.ok) {
+            const s = d.settings || {};
+            if (document.getElementById('bs-email-enabled')) document.getElementById('bs-email-enabled').value = s.email_enabled || 0;
+            if (document.getElementById('bs-email-to')) document.getElementById('bs-email-to').value = s.email_to || '';
+            if (document.getElementById('bs-session-close')) document.getElementById('bs-session-close').value = s.email_on_session_close || 0;
+            if (document.getElementById('bs-daily')) document.getElementById('bs-daily').value = s.email_daily || 0;
+            if (document.getElementById('bs-local-enabled')) document.getElementById('bs-local-enabled').value = s.local_enabled || 0;
+            if (document.getElementById('bs-local-path')) document.getElementById('bs-local-path').value = s.local_path || '';
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function saveBackupSettings() {
+    try {
+        const payload = {
+            email_enabled: document.getElementById('bs-email-enabled').value,
+            email_to: document.getElementById('bs-email-to').value,
+            email_on_session_close: document.getElementById('bs-session-close').value,
+            email_daily: document.getElementById('bs-daily').value,
+            local_enabled: document.getElementById('bs-local-enabled').value,
+            local_path: document.getElementById('bs-local-path').value
+        };
+        const res = await fetch('/api/backup-settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const d = await res.json();
+        const status = document.getElementById('bs-status');
+        if (d.ok) { status.innerText = '✅ تم حفظ الإعدادات'; status.style.color = 'green'; }
+        else { status.innerText = '❌ ' + d.error; status.style.color = 'red'; }
+    } catch(e) { alert('خطأ: ' + e.message); }
+}
+
+async function testEmailBackup() {
+    const status = document.getElementById('bs-status');
+    status.innerText = 'جارٍ الإرسال...';
+    status.style.color = 'yellow';
+    try {
+        const res = await fetch('/api/backup-test', { method: 'POST' });
+        const d = await res.json();
+        if (d.ok) { status.innerText = '✅ ' + d.message; status.style.color = 'green'; }
+        else { status.innerText = '❌ ' + d.error; status.style.color = 'red'; }
+    } catch(e) { status.innerText = '❌ ' + e.message; status.style.color = 'red'; }
+}
+
+async function saveGeneralSettings() {
+    const payload = {
+        company_name: document.getElementById('gen-name').value,
+        invoice_phone: document.getElementById('gen-phone').value,
+        invoice_address: document.getElementById('gen-address').value,
+        company_tax_no: document.getElementById('gen-tax').value
+    };
+    try {
+        const res = await fetch('/api/general-settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const d = await res.json();
+        const msg = document.getElementById('gen-settings-msg');
+        if (d.ok) { msg.innerText = '✅ تم الحفظ'; msg.style.color = 'green'; }
+        else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
+    } catch(e) { alert('خطأ: ' + e.message); }
+}
+
+async function loadInvoiceSettings() {
+    try {
+        const res = await fetch('/api/invoice-settings/get');
+        const d = await res.json();
+        if (d.ok) {
+            if (document.getElementById('inv-paper-size')) document.getElementById('inv-paper-size').value = d.invoice_paper_size || 'A4';
+            if (document.getElementById('inv-font-size')) document.getElementById('inv-font-size').value = d.invoice_font_size || 'medium';
+            if (document.getElementById('inv-align')) document.getElementById('inv-align').value = d.invoice_align || 'center';
+            if (document.getElementById('inv-show-cashier')) document.getElementById('inv-show-cashier').value = d.invoice_show_cashier || '1';
+            if (document.getElementById('inv-show-tax')) document.getElementById('inv-show-tax').value = d.invoice_show_tax || '0';
+            if (document.getElementById('inv-copies')) document.getElementById('inv-copies').value = d.invoice_copies || '1';
+            if (document.getElementById('inv-footer-msg')) document.getElementById('inv-footer-msg').value = d.invoice_footer_msg || '';
+        }
+    } catch(e) { 
+            const tbody = document.getElementById('backups-body');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="color:red;">خطأ: ' + e.message + '</td></tr>';
+            alert("خطأ حقيقي: " + e.message);
+        }
+}
+
+function toggleSubmenu(menuId, event) {
+    if (event) event.preventDefault();
+    const menu = document.getElementById(menuId);
+    const arrow = document.getElementById('advanced-arrow');
+    if (menu) {
+        if (menu.style.display === 'none' || menu.style.display === '') {
+            menu.style.display = 'block';
+            if (arrow) arrow.innerText = '▲';
+        } else {
+            menu.style.display = 'none';
+            if (arrow) arrow.innerText = '▼';
+        }
+    }
+}
+
+function showSection(id) {
+    document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
+    document.querySelectorAll('.settings-link').forEach(l => l.classList.remove('active'));
+    const sec = document.getElementById('section-' + id);
+    if (sec) sec.style.display = 'block';
+    if (event && event.target) event.target.classList.add('active');
+    localStorage.setItem('activeSettingsSection', id);
+    // تحميل بيانات القسم عند فتحه
+    if (id === 'backup') { loadBackupSettings(); loadBackupsTable(); }
+    if (id === 'cashiers') { setTimeout(loadCashiers, 150); }
+    if (id === 'tax') { loadTaxSettings(); }
+    if (id === 'permissions') { loadPermissions(); }
+    if (id === 'signatures') { loadSignatures(); }
+    if (id === 'regions') { setTimeout(loadRegions, 150); }
+    if (id === 'delivery_settings') { loadDrivers(); loadServices(); }
+    if (id === 'invoice') loadInvoiceSettings();
+}
+
+// تحميل البيانات عند فتح الصفحة
+document.addEventListener('DOMContentLoaded', () => {
+    loadInvoiceSettings();
+    loadBackupSettings();
+    // استعادة القسم النشط بعد تأخير بسيط
+    const activeSection = localStorage.getItem('activeSettingsSection');
+    if (activeSection && activeSection !== 'general') {
+        setTimeout(() => showSection(activeSection), 100);
+    }
+});
+</script>
+
+
+<script>
+async function takeBackup() {
+    const msg = document.getElementById("bs-status");
+    if (msg) { msg.innerText = "جارٍ إنشاء النسخة..."; msg.style.color = "yellow"; }
+    
+    try {
+        const res = await fetch("/api/local-backup", { method: "POST" });
+        const d = await res.json();
+        
+        if (msg) {
+            if (d.ok) { 
+                msg.innerText = "✅ " + d.message; 
+                msg.style.color = "green"; 
+                setTimeout(() => location.reload(), 1000);
+            } else { 
+                msg.innerText = "❌ " + d.error; 
+                msg.style.color = "red"; 
+            }
+        }
+    } catch(e) { 
+        if (msg) { msg.innerText = "❌ خطأ: " + e.message; msg.style.color = "red"; }
+    }
+}
+</script>
+
+
+<script>
+async function loadSettingsData() {
+    try {
+        const res = await fetch('/api/settings/data');
+        const d = await res.json();
+        if (d.ok) {
+            const whBody = document.querySelector('#warehousesTable tbody');
+            if (whBody) whBody.innerHTML = d.warehouses.map(w => `<tr><td>${w.id}</td><td>${w.name}</td></tr>`).join('');
+            
+            const curBody = document.querySelector('#currenciesTable tbody');
+            if (curBody) curBody.innerHTML = d.currencies.map(c => `<tr><td>${c.id}</td><td>${c.code}</td><td>${c.name}</td></tr>`).join('');
+            
+            const actBody = document.querySelector('#activitiesTable tbody');
+            if (actBody) actBody.innerHTML = d.activities.map(a => `<tr><td>${a.id}</td><td>${a.name}</td></tr>`).join('');
+        }
+    } catch(e) { console.error(e); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettingsData();
+});
+</script>
+
+
+<script>
+async function addWarehouse() {
+    const name = document.getElementById('newWarehouseName').value.trim();
+    if (!name) { alert('أدخل اسم المخزن'); return; }
+    const msg = document.getElementById('warehouse-msg');
+    if (msg) { msg.innerText = 'جارٍ الإضافة...'; msg.style.color = 'yellow'; }
+    try {
+        const res = await fetch('/api/settings/warehouse/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name})
+        });
+        const d = await res.json();
+        if (msg) {
+            if (d.ok) {
+                msg.innerText = '✅ ' + d.message;
+                msg.style.color = 'green';
+                document.getElementById('newWarehouseName').value = '';
+                if (typeof loadSettingsData === 'function') loadSettingsData();
+            } else {
+                msg.innerText = '❌ ' + d.error;
+                msg.style.color = 'red';
+            }
+        }
+    } catch(e) { if (msg) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; } }
+}
+</script>
+
+
+<script>
+async function addCurrency() {
+    const code = document.getElementById('newCurrencyCode').value.trim();
+    const name = document.getElementById('newCurrencyName').value.trim();
+    if (!code || !name) { alert('أدخل الكود والاسم'); return; }
+    const msg = document.getElementById('currency-msg');
+    msg.innerText = 'جارٍ الإضافة...'; msg.style.color = 'yellow';
+    try {
+        const res = await fetch('/api/settings/currency/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({code: code, name: name})
+        });
+        const d = await res.json();
+        if (d.ok) {
+            msg.innerText = '✅ ' + d.message; msg.style.color = 'green';
+            document.getElementById('newCurrencyCode').value = '';
+            document.getElementById('newCurrencyName').value = '';
+            if (typeof loadSettingsData === 'function') loadSettingsData();
+        } else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
+    } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
+}
+
+async function addActivity() {
+    const name = document.getElementById('newActivityName').value.trim();
+    if (!name) { alert('أدخل اسم النشاط'); return; }
+    const msg = document.getElementById('activity-msg');
+    msg.innerText = 'جارٍ الإضافة...'; msg.style.color = 'yellow';
+    try {
+        const res = await fetch('/api/settings/activity/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name})
+        });
+        const d = await res.json();
+        if (d.ok) {
+            msg.innerText = '✅ ' + d.message; msg.style.color = 'green';
+            document.getElementById('newActivityName').value = '';
+            if (typeof loadSettingsData === 'function') loadSettingsData();
+        } else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
+    } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
+}
+</script>
+
+
+
+
+
+<script>
+async function loadTaxSettings() {
+    try {
+        const res = await fetch('/api/settings/tax');
+        const d = await res.json();
+        if (d.ok) {
+            document.getElementById('tax-enabled').value = d.tax_enabled || '0';
+            document.getElementById('tax-rate').value = d.tax_rate || '0';
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function saveTaxSettings() {
+    const enabled = document.getElementById('tax-enabled').value;
+    const rate = document.getElementById('tax-rate').value;
+    const msg = document.getElementById('tax-msg');
+    msg.innerText = 'جارٍ الحفظ...'; msg.style.color = 'yellow';
+    
+    try {
+        const res = await fetch('/api/settings/tax', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tax_enabled: enabled, tax_rate: rate})
+        });
+        const d = await res.json();
+        if (d.ok) {
+            msg.innerText = '✅ تم الحفظ'; msg.style.color = 'green';
+        } else {
+            msg.innerText = '❌ ' + d.error; msg.style.color = 'red';
+        }
+    } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
+}
+</script>
+
+
+<script>
+async function changeMyPassword() {
+    const oldPass = document.getElementById('oldPassword').value;
+    const newPass = document.getElementById('newPassword').value;
+    const confirmPass = document.getElementById('confirmPassword').value;
+    const msg = document.getElementById('pw-msg');
+    
+    if (!oldPass || !newPass) { msg.innerText = '❌ أدخل كلمتي المرور'; msg.style.color = 'red'; return; }
+    if (newPass !== confirmPass) { msg.innerText = '❌ كلمتا المرور غير متطابقتين'; msg.style.color = 'red'; return; }
+    
+    msg.innerText = 'جارٍ التغيير...'; msg.style.color = 'yellow';
+    
+    try {
+        const res = await fetch('/api/me/password', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({old: oldPass, new: newPass})
+        });
+        const d = await res.json();
+        if (d.ok) {
+            msg.innerText = '✅ تم تغيير كلمة المرور بنجاح';
+            msg.style.color = 'green';
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        } else {
+            msg.innerText = '❌ ' + (d.error || 'حدث خطأ');
+            msg.style.color = 'red';
+        }
+    } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
+}
+</script>
+
+
+<script>
+async function loadPermissions() {
+    try {
+        const res = await fetch('/api/settings/permissions');
+        const d = await res.json();
+        if (d.ok) {
+            const p = d.permissions || {};
+            // تحميل صلاحيات المحاسب
+            document.getElementById('perm_acc_products').checked = p.accountant?.products || false;
+            document.getElementById('perm_acc_delete_inv').checked = p.accountant?.delete_inv || false;
+            document.getElementById('perm_acc_reports').checked = p.accountant?.reports || false;
+            document.getElementById('perm_acc_prices').checked = p.accountant?.prices || false;
+            // تحميل صلاحيات الكاشير
+            document.getElementById('perm_cash_reports').checked = p.cashier?.reports || false;
+            document.getElementById('perm_cash_prices').checked = p.cashier?.prices || false;
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function savePermissions() {
+    const msg = document.getElementById('perm-msg');
+    msg.innerText = 'جارٍ الحفظ...'; msg.style.color = 'yellow';
+    
+    const perms = {
+        accountant: {
+            products: document.getElementById('perm_acc_products').checked,
+            delete_inv: document.getElementById('perm_acc_delete_inv').checked,
+            reports: document.getElementById('perm_acc_reports').checked,
+            prices: document.getElementById('perm_acc_prices').checked
+        },
+        cashier: {
+            reports: document.getElementById('perm_cash_reports').checked,
+            prices: document.getElementById('perm_cash_prices').checked
+        }
+    };
+    
+    try {
+        const res = await fetch('/api/settings/permissions', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({permissions: perms})
+        });
+        const d = await res.json();
+        if (d.ok) { msg.innerText = '✅ تم حفظ الصلاحيات'; msg.style.color = 'green'; }
+        else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
+    } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
+}
+</script>
+
+
+<script>
+async function loadSignatures() {
+    try {
+        const res = await fetch('/api/settings/signatures');
+        const d = await res.json();
+        if (d.ok) {
+            document.getElementById('sig-manager').value = d.sig1 || '';
+            document.getElementById('sig-accountant').value = d.sig2 || '';
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function saveSignatures() {
+    const msg = document.getElementById('sig-msg');
+    msg.innerText = 'جارٍ الحفظ...'; msg.style.color = 'yellow';
+    try {
+        const res = await fetch('/api/settings/signatures', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({sig1: document.getElementById('sig-manager').value, sig2: document.getElementById('sig-accountant').value})
+        });
+        const d = await res.json();
+        if (d.ok) { msg.innerText = '✅ تم الحفظ'; msg.style.color = 'green'; }
+        else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
+    } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
+}
+
+async function loadRegions() {
+    try {
+        const res = await fetch('/api/settings/regions');
+        const d = await res.json();
+        if (d.ok) {
+            const tbody = document.querySelector('#regionsTable tbody');
+            if (tbody) tbody.innerHTML = d.regions.map(r => `<tr><td>${r.id}</td><td>${r.name}</td></tr>`).join('');
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function addRegion() {
+    const name = document.getElementById('newRegionName').value.trim();
+    if (!name) { alert('أدخل اسم المنطقة'); return; }
+    const msg = document.getElementById('region-msg');
+    msg.innerText = 'جارٍ الإضافة...'; msg.style.color = 'yellow';
+    try {
+        const res = await fetch('/api/settings/region/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name})
+        });
+        const d = await res.json();
+        if (d.ok) {
+            msg.innerText = '✅ ' + d.message; msg.style.color = 'green';
+            document.getElementById('newRegionName').value = '';
+            loadRegions();
+        } else { msg.innerText = '❌ ' + d.error; msg.style.color = 'red'; }
+    } catch(e) { msg.innerText = '❌ ' + e.message; msg.style.color = 'red'; }
+}
+</script>
+
+
+<script>
+async function loadDrivers() {
+    try {
+        const res = await fetch('/api/delivery/drivers');
+        const d = await res.json();
+        if (d.ok) {
+            const tbody = document.querySelector('#driversTable tbody');
+            if (tbody) tbody.innerHTML = d.drivers.map((dr, i) => `<tr><td>${i+1}</td><td>${dr.name}</td><td>${dr.phone || '-'}</td></tr>`).join('');
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function addDriver() {
+    const name = document.getElementById('newDriverName').value.trim();
+    const phone = document.getElementById('newDriverPhone').value.trim();
+    if (!name) { alert('أدخل اسم السائق'); return; }
+    const res = await fetch('/api/delivery/driver/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, phone: phone})
+    });
+    const d = await res.json();
+    alert(d.message || d.error);
+    if (d.ok) { document.getElementById('newDriverName').value = ''; document.getElementById('newDriverPhone').value = ''; loadDrivers(); }
+}
+
+async function loadServices() {
+    try {
+        const res = await fetch('/api/delivery/services');
+        const d = await res.json();
+        if (d.ok) {
+            const tbody = document.querySelector('#servicesTable tbody');
+            if (tbody) tbody.innerHTML = d.services.map((s, i) => `<tr><td>${i+1}</td><td>${s.name}</td><td>${s.price}</td></tr>`).join('');
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function addDeliveryService() {
+    const name = document.getElementById('newServiceName').value.trim();
+    const price = document.getElementById('newServicePrice').value;
+    if (!name) { alert('أدخل اسم الخدمة'); return; }
+    const res = await fetch('/api/delivery/service/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, price: Number(price || 0)})
+    });
+    const d = await res.json();
+    alert(d.message || d.error);
+    if (d.ok) { document.getElementById('newServiceName').value = ''; document.getElementById('newServicePrice').value = ''; loadServices(); }
+}
+</script>
+
+{% endblock %}
