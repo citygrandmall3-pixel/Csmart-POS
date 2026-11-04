@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="padding:20px;">
+    <h2>💾 النسخ الاحتياطية المتاحة</h2>
+    <p>هذه الصفحة تعرض جميع النسخ الاحتياطية المحفوظة على الخادم.</p>
+    <table style="width:100%; border-collapse:collapse; margin-top:15px;">
+        <thead>
+            <tr style="background:#1e1e2f; color:#ffc107;">
+                <th style="padding:10px; border:1px solid #444;">اسم النسخة</th>
+                <th style="padding:10px; border:1px solid #444;">التاريخ</th>
+                <th style="padding:10px; border:1px solid #444;">الحجم</th>
+                <th style="padding:10px; border:1px solid #444;">الإجراء</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if backups_list %}
+                {% for b in backups_list %}
+                    <tr>
+                        <td style="padding:8px; border:1px solid #444;">{{ b.name }}</td>
+                        <td style="padding:8px; border:1px solid #444;">{{ b.modified }}</td>
+                        <td style="padding:8px; border:1px solid #444;">{{ b.size }} bytes</td>
+                        <td style="padding:8px; border:1px solid #444;">
+                            <a href="/api/backups/{{ b.name }}" class="btn btn-sm btn-teal">⬇️ تنزيل</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="4" style="text-align:center; padding:20px;">لا توجد نسخ احتياطية محفوظة</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    <div style="margin-top:15px;">
+        <a href="/settings" class="btn btn-gold">⬅️ العودة للإعدادات</a>
+    </div>
+</div>
+{% endblock %}
