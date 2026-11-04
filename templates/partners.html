@@ -86,7 +86,7 @@
     <input type="hidden" id="partnerId">
     <input type="hidden" id="partnerType" value="{{ partner_type }}">
     <div class="form-grid">
-      <div><label>الكود *</label><input id="code" required maxlength="50"></div>
+      <div><label>الكود{% if is_customer %} *{% else %} (تلقائي){% endif %}</label><input id="code" {% if is_customer %}required{% else %}readonly placeholder="يُنشأ تلقائيًا عند الحفظ"{% endif %} maxlength="50"></div>
       <div><label>الاسم *</label><input id="name" required maxlength="180"></div>
       <div><label>الهاتف</label><input id="phone" maxlength="50"></div>
       <div><label>البريد الإلكتروني</label><input id="email" type="email" maxlength="180"></div>
