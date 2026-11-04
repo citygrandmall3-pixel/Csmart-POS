@@ -166,8 +166,8 @@ let latestStatement = null;
 function esc(value){if(value===null||value===undefined)return "";return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;");}
 function money(value){return Number(value||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function notify(message){if(typeof window.showAppNotification==="function")window.showAppNotification(message);else alert(message);}
-function openModal(id){document.getElementById(id).style.display="flex";}
-function closeModal(id){document.getElementById(id).style.display="none";}
+function openModal(id){const modal=document.getElementById(id);if(!modal)return;modal.classList.add("open");modal.style.display="flex";}
+function closeModal(id){const modal=document.getElementById(id);if(!modal)return;modal.classList.remove("open");modal.style.display="none";}
 function currentBalance(p){return Number(IS_CUSTOMER?p.customer_balance:p.supplier_balance)||0;}
 function balanceLabel(value){const n=Number(value||0);if(Math.abs(n)<0.005)return "0.00";const debit=(IS_CUSTOMER&&n>0)||(!IS_CUSTOMER&&n<0);return `${money(Math.abs(n))} ${debit?"مدين":"دائن"}`;}
 
