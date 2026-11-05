@@ -11471,7 +11471,7 @@ def api_session_close(sid):
     if s["status"] != "open":
         return jsonify(ok=False, error="الوردية مغلقة بالفعل"), 400
     # فقط صاحب الوردية أو المدير
-    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "dev", "accountant"):
         return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
     d = request.get_json(silent=True) or {}
     try:
@@ -11500,7 +11500,7 @@ def api_session_close(sid):
         if current["status"] != "open":
             conn.rollback()
             return jsonify(ok=False, error="الوردية مغلقة بالفعل"), 400
-        if current["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+        if current["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "dev", "accountant"):
             conn.rollback()
             return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
         s = dict(current)
@@ -11621,7 +11621,7 @@ def api_sessions_list():
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
     # admin/accountant: كل الورديات. غيرهم: وردياتهم فقط.
-    is_admin = g.user["role"] in ("admin", "accountant")
+    is_admin = g.user["role"] in ("admin", "dev", "accountant")
     if is_admin:
         rows = db.query(
             """SELECT cs.*, u.full_name AS user_name
@@ -11657,7 +11657,7 @@ def api_session_detail(sid):
     )
     if not s:
         return jsonify(ok=False, error="الوردية غير موجودة"), 404
-    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "dev", "accountant"):
         return jsonify(ok=False, error="غير مصرح"), 403
     invoices = db.query(
         """SELECT id, invoice_no, invoice_date, grand_total, paid_amount, remaining_amount, payment_method, status
