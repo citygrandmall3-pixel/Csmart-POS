@@ -124,7 +124,7 @@ def before():
 
 
 def can_write():
-    return g.user["role"] in ("admin", "accountant")
+    return g.user["role"] in ("admin", "dev", "accountant")
 
 
 def require_write(f):
@@ -137,10 +137,21 @@ def require_write(f):
 
 
 def admin_required(f):
+    """يسمح لمدير النظام ومطور النظام بصلاحيات الإدارة، مع امتيازات DEV الأعلى."""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if g.user["role"] != "admin":
-            return jsonify(error="هذه الصفحة لمدير النظام فقط"), 403
+        if g.user["role"] not in ("admin", "dev"):
+            return jsonify(error="هذه الصفحة لمدير النظام أو مطور النظام فقط"), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def dev_required(f):
+    """يقصر العملية على مطور النظام صاحب الصلاحيات الأعلى."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if g.user["role"] != "dev":
+            return jsonify(error="هذه العملية لمطور النظام فقط"), 403
         return f(*args, **kwargs)
     return wrapper
 
@@ -156,32 +167,23 @@ def dev_or_admin_required(f):
 
 
 def dev_admin_master_required(f):
-    """يسمح للمدير، ويشترط كلمة مرور المطور المستقلة عند تنفيذ DEV لعملية حساسة."""
+    """يقصر العمليات الحساسة على DEV؛ لا يحتاج المطور كلمة مرور إضافية منفصلة."""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if g.user["role"] == "admin":
-            return f(*args, **kwargs)
         if g.user["role"] != "dev":
-            return jsonify(error="هذه العملية للمدير أو مطور النظام فقط"), 403
-        supplied = request.headers.get("X-DEV-Password", "")
-        if not supplied:
-            data = request.get_json(silent=True) or {}
-            supplied = data.get("dev_password") or request.form.get("dev_password", "")
-        stored = db.get_setting("dev_master_password_hash", "")
-        if not stored or not supplied or not check_password_hash(stored, supplied):
-            return jsonify(error="كلمة مرور المطور المستقلة مطلوبة أو غير صحيحة"), 403
+            return jsonify(error="هذه العملية لمطور النظام فقط"), 403
         return f(*args, **kwargs)
     return wrapper
 
 
 @app.route("/api/dev-security/password", methods=["POST"])
-@admin_required
+@dev_required
 def api_set_dev_master_password():
     data = request.get_json(silent=True) or {}
     current_password = data.get("current_password") or ""
     new_password = data.get("new_password") or ""
     if not check_password_hash(g.user["password_hash"], current_password):
-        return jsonify(error="كلمة مرور المدير الحالية غير صحيحة"), 403
+        return jsonify(error="كلمة مرور المطور الحالية غير صحيحة"), 403
     if len(new_password) < 12 or not re.search(r"[A-Za-z]", new_password) or not re.search(r"\d", new_password):
         return jsonify(error="كلمة مرور المطور يجب أن تكون 12 حرفًا على الأقل وتحتوي على حروف وأرقام"), 400
     db.set_setting("dev_master_password_hash", generate_password_hash(new_password))
@@ -306,7 +308,7 @@ def budget_page():
 @dev_or_admin_required
 def users_page():
     users = db.query("SELECT id, username, full_name, role, created_at FROM users ORDER BY id")
-    return render_template("users.html", users=users, is_admin=(g.user["role"] == "admin"))
+    return render_template("users.html", users=users, is_dev=(g.user["role"] == "dev"))
 
 
 @app.route("/settings")
@@ -8113,7 +8115,7 @@ def api_journal_delete(eid):
     if period_error:
         return jsonify(error=period_error), 400
 
-    if e["status"] == "posted" and g.user["role"] != "admin":
+    if e["status"] == "posted" and g.user["role"] not in ("admin", "dev"):
         return jsonify(
             error="حذف القيود المرحلة لمدير النظام فقط — قم بإلغاء الترحيل أولًا"
         ), 403
@@ -9004,8 +9006,8 @@ def api_users_create():
     username = _sanitize((d.get("username") or "").strip().lower())
     full_name = _sanitize((d.get("full_name") or "").strip())
     role = d.get("role") if d.get("role") in ROLES else "accountant"
-    if g.user["role"] == "dev" and role == "admin":
-        return jsonify(error="مطور النظام لا يستطيع إنشاء مدير نظام"), 403
+    if g.user["role"] != "dev" and role in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع إنشاء مدير آخر أو مطور نظام"), 403
     password = d.get("password") or ""
     if not username or not full_name or len(password) < 8:
         return jsonify(error="بيانات غير مكتملة (كلمة المرور 8 أحرف على الأقل)"), 400
@@ -9029,8 +9031,8 @@ def api_users_password(uid):
     u = db.query_one("SELECT * FROM users WHERE id=?", (uid,))
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
-    if g.user["role"] == "dev" and u["role"] == "admin":
-        return jsonify(error="مطور النظام لا يستطيع تغيير كلمة مرور المدير"), 403
+    if g.user["role"] != "dev" and u["role"] in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع تغيير كلمة مرور المدير أو المطور"), 403
     if len(password) < 8:
         return jsonify(error="كلمة المرور 8 أحرف على الأقل"), 400
     if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password):
@@ -9052,8 +9054,8 @@ def api_users_role(uid):
 
     if role not in ROLES:
         return jsonify(error="الصلاحية غير صحيحة"), 400
-    if g.user["role"] == "dev" and role == "admin":
-        return jsonify(error="مطور النظام لا يستطيع منح صلاحية المدير"), 403
+    if g.user["role"] != "dev" and role in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع منح صلاحية المدير أو المطور"), 403
 
     u = db.query_one(
         "SELECT * FROM users WHERE id=?",
@@ -9063,15 +9065,15 @@ def api_users_role(uid):
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
 
-    if g.user["role"] == "dev" and u["role"] == "admin":
-        return jsonify(error="لا يستطيع مطور النظام تعديل حساب المدير"), 403
+    if g.user["role"] != "dev" and u["role"] in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع تعديل حساب المدير أو المطور"), 403
 
     # منع المدير من تخفيض صلاحية حسابه الحالي
-    if uid == g.user["id"] and role != "admin":
-        return jsonify(error="لا يمكنك تخفيض صلاحية حسابك الحالي"), 400
+    if uid == g.user["id"] and role != g.user["role"]:
+        return jsonify(error="لا يمكنك تغيير صلاحية حسابك الحالي"), 400
 
     # منع إزالة صلاحية آخر مدير
-    if u["role"] == "admin" and role != "admin":
+    if g.user["role"] != "dev" and u["role"] == "admin" and role != "admin":
         admins = db.query(
             "SELECT id FROM users WHERE role='admin'"
         )
@@ -9115,9 +9117,9 @@ def api_users_delete(uid):
     u = db.query_one("SELECT * FROM users WHERE id=?", (uid,))
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
-    if g.user["role"] == "dev" and u["role"] == "admin":
-        return jsonify(error="لا يستطيع مطور النظام حذف حساب المدير"), 403
-    if u["role"] == "admin" and len(admins) <= 1:
+    if g.user["role"] != "dev" and u["role"] in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع حذف حساب المدير أو المطور"), 403
+    if g.user["role"] != "dev" and u["role"] == "admin" and len(admins) <= 1:
         return jsonify(error="لا يمكن حذف آخر مدير نظام"), 400
     db.execute("DELETE FROM users WHERE id=?", (uid,))
     db.audit(g.user["full_name"], "حذف مستخدم", u["username"])
@@ -12417,7 +12419,7 @@ def api_report_stock():
 
 @app.route("/reports", methods=["GET"])
 def reports_page():
-    is_admin = (g.user.get("role") == "admin")
+    is_admin = (g.user.get("role") in ("admin", "dev"))
     return render_template("reports.html", is_admin=is_admin)
 
 
@@ -12430,7 +12432,7 @@ def api_reports_download():
     
     # التحقق من الصلاحيات
     user_role = g.user.get("role") if hasattr(g, "user") else None
-    if rep_type in ("weekly", "monthly") and user_role != "admin":
+    if rep_type in ("weekly", "monthly") and user_role not in ("admin", "dev"):
         return jsonify(error="غير مصرح لك بالوصول لهذا التقرير"), 403
 
     output = io.StringIO()
