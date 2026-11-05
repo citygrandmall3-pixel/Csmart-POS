@@ -7578,7 +7578,7 @@ def api_stock_transfer_create():
                    (company_id, transfer_no, source_warehouse_id, destination_warehouse_id,
                     product_id, unit_id, quantity, notes, created_by)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (company_id, f"TR-{int(time.time() * 1000)}", source_id, destination_id,
+                (company_id, f"TR-{time.time_ns()}", source_id, destination_id,
                  product_id, unit_id, quantity, notes, g.user["id"]),
             )
             transfer_id = cur.lastrowid
@@ -12131,7 +12131,7 @@ def api_pos_inventory_quick_add():
     if max_stock > 0 and max_stock < min_stock:
         return jsonify(ok=False, error="الحد الأقصى لا يمكن أن يقل عن الحد الأدنى"), 400
     if not code:
-        code = f"POS-{company_id}-{int(time.time() * 1000)}"
+        code = f"POS-{company_id}-{time.time_ns()}"
     def flag(key, default):
         value = d.get(key)
         if value is None:
