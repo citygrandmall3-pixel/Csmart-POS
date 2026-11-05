@@ -10,7 +10,7 @@
       <button class="btn btn-dark btn-sm" onclick="expandAll()">⬇️ تفريع الكل</button>
       <button class="btn btn-dark btn-sm" onclick="collapseAll()">⬆️ طي الكل</button>
       <a class="btn btn-gold btn-sm" href="/accounts">📚 العرض المسطح</a>
-      {% if user.role == 'admin' %}
+      {% if user.role in ('admin', 'dev') %}
       <button class="btn btn-red btn-sm" onclick="wipeTree()">🗑️ مسح الشجرة كاملة</button>
       {% endif %}
     </div>
