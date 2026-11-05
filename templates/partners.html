@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% set is_customer = partner_type == 'customer' %}
-{% set can_manage = user and user.role in ('admin', 'accountant') %}
+{% set can_manage = user and user.role in ('admin', 'dev', 'accountant') %}
 <style>
 .partner-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:14px 0}
 .partner-stat{background:var(--card-bg,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:14px}
