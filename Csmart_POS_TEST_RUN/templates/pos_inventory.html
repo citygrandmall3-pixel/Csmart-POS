@@ -10,6 +10,32 @@
         button { background: #4CAF50; color: white; cursor: pointer; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 10px; border-bottom: 1px solid #444; text-align: right; }
+
+        /* تحسين وضوح نافذة المصروفات */
+        #expDesc, #expAmount, #expensesTable, #expensesTable *,
+        #expensesBody, #expensesBody *, #expMsg,
+        body .card h3, body h3 {
+            color: #17212f !important;
+            -webkit-text-fill-color: #17212f !important;
+            opacity: 1 !important;
+            text-shadow: none !important;
+        }
+        #expDesc, #expAmount {
+            background: #ffffff !important;
+            border: 1px solid #9aa8b8 !important;
+        }
+        #expensesTable, #expensesTable th, #expensesTable td {
+            background-color: #ffffff !important;
+            border-color: #aeb8c5 !important;
+        }
+        #expensesTable thead th {
+            background-color: #e8eef6 !important;
+            color: #172b45 !important;
+            -webkit-text-fill-color: #172b45 !important;
+        }
+        #expensesTable td { color: #17212f !important; -webkit-text-fill-color: #17212f !important; }
+        #expMsg { color: #17212f !important; -webkit-text-fill-color: #17212f !important; }
+
     </style>
 </head>
 <body>
