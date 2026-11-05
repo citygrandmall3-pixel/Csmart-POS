@@ -12035,6 +12035,11 @@ def pos_inventory_page():
     return render_template("pos_inventory.html")
 
 
+@app.route("/pos-expenses", methods=["GET"])
+def pos_expenses_page():
+    return render_template("pos_expenses.html")
+
+
 def _get_pos_inventory_warehouse(conn, company_id):
     pref = conn.execute(
         "SELECT pos_warehouse_id FROM company_preferences WHERE company_id=?",
