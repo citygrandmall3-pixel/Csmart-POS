@@ -5,10 +5,10 @@
     <button class="btn btn-gold" onclick="openAddModal()">➕ إضافة مستخدم</button>
 </div>
 
-{% if is_admin %}
+{% if is_dev %}
 <div class="card" style="margin-bottom:18px; padding:18px; border:1px solid #d7dee8;">
     <h3 style="margin-top:0;">🔐 كلمة مرور المطور المستقلة</h3>
-    <p style="margin:6px 0 14px; color:#64748b;">يضبطها مدير النظام فقط. سيُطلب من المطور إدخالها قبل استعادة نسخة أو تغيير إعدادات النسخ الاحتياطي.</p>
+    <p style="margin:6px 0 14px; color:#64748b;">يضبطها مطور النظام فقط. يمكن تحديثها من حساب المطور، ولا تُطلب كشرط لاستخدام صلاحياته.</p>
     <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px;">
         <div><label>كلمة مرور المدير الحالية</label><input id="dev-current-password" type="password" autocomplete="current-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
         <div><label>كلمة مرور المطور الجديدة</label><input id="dev-new-password" type="password" autocomplete="new-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
@@ -61,9 +61,9 @@
             <select id="u-role" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:5px;">
                 <option value="cashier">كاشير</option>
                 <option value="accountant">محاسب</option>
-                <option value="admin">مدير</option>
+                {% if is_dev %}<option value="admin">مدير</option>{% endif %}
                 <option value="viewer">مشاهدة فقط</option>
-                <option value="dev">مطور النظام</option>
+                {% if is_dev %}<option value="dev">مطور النظام</option>{% endif %}
             </select>
         </div>
         <div id="modalMsg" style="color:red; font-weight:bold; margin-bottom:10px; text-align:center; font-size:16px;"></div>
