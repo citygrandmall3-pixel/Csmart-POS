@@ -182,7 +182,7 @@ def api_set_dev_master_password():
     new_password = data.get("new_password") or ""
     if not check_password_hash(g.user["password_hash"], current_password):
         return jsonify(error="كلمة مرور المدير الحالية غير صحيحة"), 403
-    if len(new_password) < 12 or not re.search(r"[A-Za-z]", new_password) or not re.search(r"\\d", new_password):
+    if len(new_password) < 12 or not re.search(r"[A-Za-z]", new_password) or not re.search(r"\d", new_password):
         return jsonify(error="كلمة مرور المطور يجب أن تكون 12 حرفًا على الأقل وتحتوي على حروف وأرقام"), 400
     db.set_setting("dev_master_password_hash", generate_password_hash(new_password))
     db.audit(g.user["full_name"], "تعيين كلمة مرور المطور المستقلة")
