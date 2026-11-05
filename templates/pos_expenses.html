@@ -4,13 +4,13 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>مصروفات</title>
 <style>
-body{font-family:Tahoma,Arial,sans-serif;background:#1e1e2f;color:#fff;margin:0;padding:22px}
-.wrap{max-width:1100px;margin:auto}.card{background:#2a2a40;border:1px solid #444;border-radius:10px;padding:20px;margin:0 0 20px}
+body{font-family:Tahoma,Arial,sans-serif;background:#f3f5f8;color:#202938;margin:0;padding:22px}h1,h2,label{color:#172b45}
+.wrap{max-width:1100px;margin:auto}.card{background:#fff;color:#202938;border:1px solid #d8dee8;border-radius:10px;padding:20px;margin:0 0 20px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
 h1,h2{margin-top:0}.grid{display:grid;grid-template-columns:2fr 1fr auto;gap:10px}
 input,button{font:inherit;padding:11px;border-radius:6px;border:1px solid #555}
-input{background:#171725;color:#fff;min-width:0}button,.back{background:#dc3545;color:#fff;border:0;cursor:pointer;font-weight:bold}
+input{background:#fff;color:#202938;border:1px solid #b9c3d0;min-width:0;padding:10px;border-radius:6px}button,.back{background:#dc3545;color:#fff;border:0;cursor:pointer;font-weight:bold}
 button:disabled{opacity:.6;cursor:wait}.back{display:inline-block;background:#596579;padding:9px 18px;border-radius:6px;text-decoration:none;margin-bottom:14px}
-.msg{margin-top:12px;min-height:22px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:600px}th,td{padding:11px;border:1px solid #444;text-align:right}th{background:#1e1e2f}
+.msg{margin-top:12px;min-height:22px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:600px}th,td{padding:11px;border:1px solid #d8dee8;text-align:right;color:#202938}th{background:#e8eef6;color:#172b45}
 @media(max-width:650px){.grid{grid-template-columns:1fr}}
 </style></head>
 <body><main class="wrap">
@@ -24,7 +24,7 @@ button:disabled{opacity:.6;cursor:wait}.back{display:inline-block;background:#59
 <script>
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function showMsg(t,ok){const x=document.getElementById("expMsg");x.textContent=t;x.style.color=ok?"#72df9b":"#ff7777"}
-async function loadExpenses(){const body=document.getElementById("expensesBody");try{const r=await fetch("/api/pos/expenses/list");const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"تعذر تحميل المصروفات");const rows=d.expenses||[];body.innerHTML=rows.length?rows.map((e,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(e.description)+'</td><td>'+Number(e.amount||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td>'+esc(e.created_at||"")+'</td></tr>').join(""):'<tr><td colspan="4" style="text-align:center">لا توجد مصروفات مسجلة</td></tr>'}catch(e){body.innerHTML='<tr><td colspan="4">'+esc(e.message)+'</td></tr>'}}
+async function loadExpenses(){const body=document.getElementById("expensesBody");try{const r=await fetch("/api/pos/expenses/list");const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"تعذر تحميل المصروفات");const rows=d.expenses||[];body.innerHTML=rows.length?rows.map((e,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(e.description==="مصروف إغلاق وردية"?"مصروف إغلاق وردية (تلقائي عند إغلاق الوردية)":e.description)+'</td><td>'+Number(e.amount||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td>'+esc(e.created_at||"")+'</td></tr>').join(""):'<tr><td colspan="4" style="text-align:center">لا توجد مصروفات مسجلة</td></tr>'}catch(e){body.innerHTML='<tr><td colspan="4">'+esc(e.message)+'</td></tr>'}}
 async function saveExpense(){const desc=document.getElementById("expDesc").value.trim(),amount=Number(document.getElementById("expAmount").value),btn=document.getElementById("saveBtn");if(!desc||!Number.isFinite(amount)||amount<=0){showMsg("أدخل وصفًا ومبلغًا صحيحًا أكبر من صفر.",false);return}btn.disabled=true;try{const r=await fetch("/api/pos/expense",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({description:desc,amount})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"تعذر حفظ المصروف");document.getElementById("expDesc").value="";document.getElementById("expAmount").value="";showMsg(d.message||"تم تسجيل المصروف بنجاح",true);await loadExpenses()}catch(e){showMsg(e.message,false)}finally{btn.disabled=false}}
 window.addEventListener("load",loadExpenses);
 </script></body></html>
