@@ -15,8 +15,9 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .tools{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.tools input{flex:1;min-width:180px}
 .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:11px;border-bottom:1px solid #e7eaf0;text-align:right;white-space:nowrap}th{background:#f0f3f8}
 .note{color:#596579;font-size:13px;line-height:1.7}.status{margin-top:10px;font-weight:bold}.good{color:#137547}.bad{color:#b42318}
-</style></head>
+.page-back{background:#596579;color:#fff;padding:9px 18px;border:0;border-radius:7px;cursor:pointer;margin:0 0 14px}</style></head>
 <body><main class="wrap">
+<button type="button" class="page-back" onclick="history.back()">رجوع</button>
 <h1>أرصدة المخازن والتحويلات</h1>
 <section class="card"><h2>أرصدة جميع المخازن</h2>
 <div class="tools"><input id="search" placeholder="بحث باسم الصنف أو كوده أو المخزن"><select id="warehouseFilter"><option value="">كل المخازن</option></select><button onclick="loadBalances()">تحديث الأرصدة</button></div>
