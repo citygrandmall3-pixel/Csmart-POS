@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}وحدات القياس{% endblock %}
+{% block page_title %}وحدات القياس{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1>📏 وحدات القياس</h1>
+    <p>إدارة وحدات قياس المنتجات والكميات.</p>
+  </div>
+
+  <button class="btn btn-primary" type="button" onclick="openForm()">
+    ➕ إضافة وحدة
+  </button>
+</div>
+
+<div class="card">
+  <div class="toolbar">
+    <input
+      type="text"
+      id="search"
+      placeholder="🔎 بحث بالكود أو الاسم أو الرمز..."
+      oninput="renderUnits()"
+    >
+
+    <select id="statusFilter" onchange="renderUnits()">
+      <option value="">كل الحالات</option>
+      <option value="1">نشطة</option>
+      <option value="0">غير نشطة</option>
+    </select>
+
+    <button class="btn btn-secondary" type="button" onclick="loadUnits()">
+      🔄 تحديث
+    </button>
+  </div>
+</div>
+
+<div class="card" id="unitFormCard" style="display:none">
+  <div class="card-header">
+    <h3 id="formTitle">إضافة وحدة قياس</h3>
+  </div>
+
+  <form id="unitForm" onsubmit="saveUnit(event)">
+    <input type="hidden" id="unitId">
+
+    <div class="form-grid">
+
+      <input id="code" type="hidden">
+
+      <div class="field">
+        <label>اسم الوحدة *</label>
+        <input id="name" required maxlength="100" placeholder="قطعة">
+      </div>
+
+      <div class="field">
+        <label>الرمز</label>
+        <input id="symbol" maxlength="30" placeholder="قط">
+      </div>
+
+      <div class="field">
+        <label>نوع الوحدة *</label>
+        <select id="unitType" required>
+          <option value="quantity">كمية</option>
+          <option value="length">طول</option>
+          <option value="weight">وزن</option>
+          <option value="volume">حجم</option>
+          <option value="area">مساحة</option>
+          <option value="time">زمن</option>
+          <option value="other">أخرى</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>المنازل العشرية *</label>
+        <input
+          id="decimalPlaces"
+          type="number"
+          min="0"
+          max="6"
+          value="2"
+          required
+        >
+      </div>
+
+      <div class="field">
+        <label>الحالة</label>
+        <select id="isActive">
+          <option value="1">نشطة</option>
+          <option value="0">غير نشطة</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">💾 حفظ</button>
+      <button class="btn btn-secondary" type="button" onclick="closeForm()">إلغاء</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+
+    <table>
+      <thead>
+        <tr>
+          <th>الكود</th>
+          <th>اسم الوحدة</th>
+          <th>الرمز</th>
+          <th>النوع</th>
+          <th>المنازل</th>
+          <th>الحالة</th>
+          <th>الإجراءات</th>
+        </tr>
+      </thead>
+
+      <tbody id="unitsBody">
+        <tr>
+          <td colspan="7" style="text-align:center">جارٍ التحميل...</td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let units = [];
+let editingId = null;
+
+const typeNames = {
+  quantity: "كمية",
+  length: "طول",
+  weight: "وزن",
+  volume: "حجم",
+  area: "مساحة",
+  time: "زمن",
+  other: "أخرى"
+};
+
+function esc(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function loadUnits() {
+  try {
+    const r = await fetch("/api/units");
+    const data = await r.json();
+
+    if (!r.ok) {
+      throw new Error(data.error || "تعذر تحميل الوحدات");
+    }
+
+    units = data.items || [];
+    renderUnits();
+
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function renderUnits() {
+  const body = document.getElementById("unitsBody");
+  const search = document.getElementById("search").value.trim().toLowerCase();
+  const status = document.getElementById("statusFilter").value;
+
+  const filtered = units.filter(u => {
+
+    const text = [
+      u.code,
+      u.name,
+      u.symbol,
+      typeNames[u.unit_type] || u.unit_type
+    ].join(" ").toLowerCase();
+
+    const matchesSearch = !search || text.includes(search);
+    const matchesStatus = status === "" || String(u.is_active) === status;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  if (!filtered.length) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align:center">
+          لا توجد وحدات.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  body.innerHTML = filtered.map(u => `
+    <tr>
+      <td><b>${esc(u.code)}</b></td>
+      <td>${esc(u.name)}</td>
+      <td>${esc(u.symbol)}</td>
+      <td>${esc(typeNames[u.unit_type] || u.unit_type)}</td>
+      <td>${esc(u.decimal_places)}</td>
+      <td>
+        ${
+          u.is_active
+            ? '<span class="badge badge-success">نشطة</span>'
+            : '<span class="badge badge-danger">غير نشطة</span>'
+        }
+      </td>
+      <td>
+        <button class="btn btn-sm btn-secondary"
+                onclick="editUnit(${u.id})">
+          ✏️ تعديل
+        </button>
+
+        <button class="btn btn-sm btn-secondary"
+                onclick="toggleUnit(${u.id}, ${u.is_active})">
+          ${u.is_active ? "⛔ تعطيل" : "🟢 تفعيل"}
+        </button>
+
+        <button class="btn btn-sm btn-danger"
+                onclick="deleteUnit(${u.id})">
+          🗑️ حذف
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function openForm(unit = null) {
+  document.getElementById("unitFormCard").style.display = "block";
+
+  if (!unit) {
+    editingId = null;
+
+    document.getElementById("formTitle").textContent =
+      "إضافة وحدة قياس";
+
+    document.getElementById("unitId").value = "";
+    document.getElementById("code").value = "";
+    document.getElementById("name").value = "";
+    document.getElementById("symbol").value = "";
+    document.getElementById("unitType").value = "quantity";
+    document.getElementById("decimalPlaces").value = "2";
+    document.getElementById("isActive").value = "1";
+
+  } else {
+    editingId = unit.id;
+
+    document.getElementById("formTitle").textContent =
+      "تعديل وحدة قياس";
+
+    document.getElementById("unitId").value = unit.id;
+    document.getElementById("code").value = unit.code || "";
+    document.getElementById("name").value = unit.name || "";
+    document.getElementById("symbol").value = unit.symbol || "";
+    document.getElementById("unitType").value = unit.unit_type || "quantity";
+    document.getElementById("decimalPlaces").value =
+      unit.decimal_places ?? 2;
+    document.getElementById("isActive").value =
+      unit.is_active ? "1" : "0";
+  }
+
+  document.getElementById("code").focus();
+}
+
+function closeForm() {
+  editingId = null;
+  document.getElementById("unitFormCard").style.display = "none";
+  document.getElementById("unitForm").reset();
+  document.getElementById("decimalPlaces").value = "2";
+  document.getElementById("unitType").value = "quantity";
+}
+
+function editUnit(id) {
+  const unit = units.find(x => x.id === id);
+
+  if (!unit) {
+    alert("الوحدة غير موجودة.");
+    return;
+  }
+
+  openForm(unit);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function saveUnit(event) {
+  event.preventDefault();
+
+  const id = editingId;
+
+  const payload = {
+    code: document.getElementById("code").value.trim(),
+    name: document.getElementById("name").value.trim(),
+    symbol: document.getElementById("symbol").value.trim(),
+    unit_type: document.getElementById("unitType").value,
+    decimal_places:
+      Number(document.getElementById("decimalPlaces").value),
+    is_active:
+      document.getElementById("isActive").value === "1"
+  };
+
+  try {
+    const r = await fetch(
+      id ? `/api/units/${id}` : "/api/units",
+      {
+        method: id ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      throw new Error(data.error || "تعذر حفظ الوحدة");
+    }
+
+    closeForm();
+    await loadUnits();
+
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function toggleUnit(id, active) {
+  try {
+    const action = active ? "deactivate" : "activate";
+
+    const r = await fetch(`/api/units/${id}/${action}`, {
+      method: "POST"
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      throw new Error(data.error || "تعذر تغيير حالة الوحدة");
+    }
+
+    await loadUnits();
+
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function deleteUnit(id) {
+  const unit = units.find(x => x.id === id);
+
+  if (!unit) {
+    return;
+  }
+
+  if (!confirm(
+    `هل تريد حذف الوحدة "${unit.name}"؟`
+  )) {
+    return;
+  }
+
+  try {
+    const r = await fetch(`/api/units/${id}`, {
+      method: "DELETE"
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      throw new Error(data.error || "تعذر حذف الوحدة");
+    }
+
+    await loadUnits();
+
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+loadUnits();
+</script>
+{% endblock %}

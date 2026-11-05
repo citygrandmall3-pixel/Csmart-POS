@@ -59,7 +59,17 @@
 .partner-modal .partner-modal-box .partner-statement-summary>div{
   color:#1f2937 !important;
 }
-</style>
+/* STATEMENT_HIGH_CONTRAST_FIX */
+#statementModal .partner-modal-box table{width:100%;border-collapse:collapse}
+#statementModal .partner-modal-box thead th{background:#17365d!important;color:#fff!important;font-size:14px!important;font-weight:800!important;padding:12px 9px!important;border:1px solid #cbd5e1!important;opacity:1!important}
+#statementModal #statementRows td{background:#fff!important;color:#111827!important;font-size:14px!important;font-weight:600!important;padding:12px 9px!important;border:1px solid #cbd5e1!important;opacity:1!important}
+#statementModal #statementRows tr:nth-child(even) td{background:#edf2f7!important}
+#statementModal #statementRows tr:hover td{background:#dbeafe!important;color:#111827!important}
+#statementModal #statementRows td strong{color:#111827!important;font-weight:900!important}
+#statementModal .partner-statement-summary>div{background:#f1f5f9!important;border:1px solid #94a3b8!important}
+#statementModal .partner-statement-summary small{color:#334155!important;font-weight:700!important}
+#statementModal .partner-statement-summary strong{color:#111827!important;font-size:17px!important;font-weight:900!important}
+#statementModal .partner-empty{color:#334155!important;background:#f8fafc!important}</style>
 
 <div class="page-header">
   <div>
@@ -86,7 +96,7 @@
     <input type="hidden" id="partnerId">
     <input type="hidden" id="partnerType" value="{{ partner_type }}">
     <div class="form-grid">
-      <div><label>الكود{% if is_customer %} *{% else %} (تلقائي){% endif %}</label><input id="code" {% if is_customer %}required{% else %}readonly placeholder="يُنشأ تلقائيًا عند الحفظ"{% endif %} maxlength="50"></div>
+      <input id="code" type="hidden">
       <div><label>الاسم *</label><input id="name" required maxlength="180"></div>
       <div><label>الهاتف</label><input id="phone" maxlength="50"></div>
       <div><label>البريد الإلكتروني</label><input id="email" type="email" maxlength="180"></div>
@@ -133,6 +143,12 @@
     </div>
     <div class="partner-statement-summary" id="statementSummary"></div>
     <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>رقم الحركة</th><th>البيان</th><th>الحساب المقابل</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody id="statementRows"><tr><td colspan="7" class="partner-empty">اختر الطرف لعرض كشف الحساب.</td></tr></tbody></table></div>
+    <div id="supplierDocuments" style="display:none;margin-top:22px">
+      <h3>فواتير الشراء المعتمدة</h3>
+      <div class="table-wrap"><table><thead><tr><th>تاريخ الفاتورة</th><th>رقم الفاتورة</th><th>رقم فاتورة المورد</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>رقم القيد</th></tr></thead><tbody id="supplierInvoiceRows"><tr><td colspan="7" class="partner-empty">لا توجد فواتير معتمدة.</td></tr></tbody></table></div>
+      <h3 style="margin-top:18px">مرتجعات مشتريات المورد</h3>
+      <div class="table-wrap"><table><thead><tr><th>تاريخ المرتجع</th><th>رقم المرتجع</th><th>فاتورة الشراء</th><th>البيان</th><th>إجمالي المرتجع</th><th>رقم القيد</th></tr></thead><tbody id="supplierReturnRows"><tr><td colspan="6" class="partner-empty">لا توجد مرتجعات.</td></tr></tbody></table></div>
+    </div>
   </div>
 </div>
 
@@ -166,8 +182,8 @@ let latestStatement = null;
 function esc(value){if(value===null||value===undefined)return "";return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;");}
 function money(value){return Number(value||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function notify(message){if(typeof window.showAppNotification==="function")window.showAppNotification(message);else alert(message);}
-function openModal(id){const modal=document.getElementById(id);if(!modal)return;modal.classList.add("open");modal.style.display="flex";}
-function closeModal(id){const modal=document.getElementById(id);if(!modal)return;modal.classList.remove("open");modal.style.display="none";}
+function openModal(id){document.getElementById(id).style.display="flex";}
+function closeModal(id){document.getElementById(id).style.display="none";}
 function currentBalance(p){return Number(IS_CUSTOMER?p.customer_balance:p.supplier_balance)||0;}
 function balanceLabel(value){const n=Number(value||0);if(Math.abs(n)<0.005)return "0.00";const debit=(IS_CUSTOMER&&n>0)||(!IS_CUSTOMER&&n<0);return `${money(Math.abs(n))} ${debit?"مدين":"دائن"}`;}
 
@@ -195,7 +211,7 @@ function renderPartners(){
     const acct=IS_CUSTOMER?`${esc(p.receivable_account_no||"-")} - ${esc(p.receivable_account_name||"")}`:`${esc(p.payable_account_no||"-")} - ${esc(p.payable_account_name||"")}`;
     const kind=p.partner_type==="both"?` <small>(سجل مشترك قديم)</small>`:"";
     const credit=Number(p.credit_limit||0);const available=credit>0?(due>credit?`<span style="color:#b91c1c;font-weight:700">متجاوز بمقدار ${money(due-credit)}</span>`:money(credit-due)):"—";const creditHtml=IS_CUSTOMER?`<td>${credit>0?money(credit):"غير محدد"}</td><td>${credit>0?available:"غير محدد"}</td>`:"";
-    return `<tr><td>${i+1}</td><td>${esc(p.code)}</td><td><strong>${esc(p.name)}</strong>${kind}</td><td>${esc(p.phone||"-")}</td><td>${esc(p.tax_no||"-")}</td><td>${acct}</td>${creditHtml}<td><strong>${balanceLabel(balance)}</strong></td><td>${active?"نشط":"غير نشط"}</td><td><div class="partner-actions"><button class="btn" type="button" onclick="openStatement(${p.id})">كشف الحساب</button>{% if can_manage %}<button class="btn btn-primary" type="button" onclick="openSettlement(${p.id})" ${due<=0.004?"disabled":""}>تسوية</button><button class="btn" type="button" onclick="editPartner(${p.id})">تعديل</button><button class="btn btn-danger" type="button" onclick="deletePartner(${p.id})">حذف</button>{% endif %}</div></td></tr>`;
+    return `<tr><td>${i+1}</td><td>${esc(p.code)}</td><td><strong>${esc(p.name)}</strong>${kind}</td><td>${esc(p.phone||"-")}</td><td>${esc(p.tax_no||"-")}</td><td>${acct}</td>${creditHtml}<td><strong>${balanceLabel(balance)}</strong></td><td>${active?"نشط":"غير نشط"}</td><td><div class="partner-actions"><button class="btn" type="button" onclick="openStatement(${p.id})">كشف الحساب</button>{% if can_manage %}<button class="btn btn-primary" type="button" onclick="openSettlement(${p.id})" >تسوية</button><button class="btn" type="button" onclick="editPartner(${p.id})">تعديل</button><button class="btn btn-danger" type="button" onclick="deletePartner(${p.id})">حذف</button>{% endif %}</div></td></tr>`;
   }).join("");
 }
 
@@ -249,6 +265,15 @@ async function loadStatement(){
   latestStatement=data;document.getElementById("statementTitle").textContent=`كشف حساب ${data.partner.name}`;
   const s=data.summary;document.getElementById("statementSummary").innerHTML=`<div><small>الرصيد الافتتاحي</small><strong>${balanceLabel(s.opening_balance)}</strong></div><div><small>إجمالي المدين</small><strong>${money(s.debit)}</strong></div><div><small>إجمالي الدائن</small><strong>${money(s.credit)}</strong></div><div><small>الرصيد الختامي</small><strong>${balanceLabel(s.closing_balance)}</strong></div>`;
   const rows=data.entries||[];document.getElementById("statementRows").innerHTML=rows.length?rows.map(r=>`<tr><td>${esc(r.entry_date)}</td><td>${esc(r.movement_no)}</td><td>${esc(r.description)}</td><td>${esc((r.acc_no||"")+" "+(r.account_name||""))}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${balanceLabel(r.balance)}</td></tr>`).join(""):`<tr><td colspan="7" class="partner-empty">لا توجد حركات خلال الفترة المحددة.</td></tr>`;
+  const docs=data.documents||{};
+  const docsBox=document.getElementById("supplierDocuments");
+  if(docsBox){
+    docsBox.style.display=IS_CUSTOMER?"none":"block";
+    const invoices=docs.purchase_invoices||[];
+    const returns=docs.purchase_returns||[];
+    document.getElementById("supplierInvoiceRows").innerHTML=invoices.length?invoices.map(d=>`<tr><td>${esc(d.invoice_date)}</td><td>${esc(d.invoice_no)}</td><td>${esc(d.supplier_invoice_no||"-")}</td><td>${money(d.grand_total)}</td><td>${money(d.paid_amount)}</td><td>${money(d.remaining_amount)}</td><td>${esc(d.movement_no||"-")}</td></tr>`).join(""):`<tr><td colspan="7" class="partner-empty">لا توجد فواتير شراء معتمدة خلال الفترة.</td></tr>`;
+    document.getElementById("supplierReturnRows").innerHTML=returns.length?returns.map(d=>`<tr><td>${esc(d.return_date)}</td><td>${esc(d.return_no)}</td><td>${esc(d.invoice_no||"-")}</td><td>${esc(d.reason||"-")}</td><td>${money(d.total_amount)}</td><td>${esc(d.movement_no||"-")}</td></tr>`).join(""):`<tr><td colspan="6" class="partner-empty">لا توجد مرتجعات مشتريات خلال الفترة.</td></tr>`;
+  }
 }
 function printStatement(){if(!latestStatement)return;const content=document.querySelector("#statementModal .partner-modal-box").innerHTML;const w=window.open("","_blank");if(!w){notify("اسمح بفتح نافذة الطباعة");return;}w.document.write(`<html dir="rtl"><head><title>كشف حساب</title><style>body{font-family:Arial;padding:20px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #bbb;padding:7px;text-align:right}button,input{display:none}</style></head><body>${content}</body></html>`);w.document.close();w.print();}
 
@@ -259,7 +284,7 @@ async function loadSettlementAccounts(){
   return settlementAccounts;
 }
 async function openSettlement(id){
-  const p=partners.find(x=>Number(x.id)===Number(id));if(!p)return;settlementPartnerId=id;const outstanding=Math.max(0,currentBalance(p));
+  const p=partners.find(x=>Number(x.id)===Number(id));if(!p)return;settlementPartnerId=id;const outstanding=Math.max(0,currentBalance(p));if(outstanding<=0.004){notify("تعذر إجراء التسوية: لا يوجد رصيد مستحق لهذا الطرف.");return;}
   document.getElementById("settlementPartnerName").textContent=`${p.code} - ${p.name}`;
   document.getElementById("settlementOutstanding").textContent=money(outstanding);
   document.getElementById("settlementAmount").value="";document.getElementById("settlementAmount").max=outstanding.toFixed(2);

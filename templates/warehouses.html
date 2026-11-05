@@ -1,0 +1,755 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1>🏬 المخازن</h1>
+        <p>إدارة المخازن والفروع ومواقع التخزين</p>
+    </div>
+
+    <button class="btn btn-primary" type="button" onclick="openWarehouseForm()">
+        ➕ إضافة مخزن
+    </button>
+</div>
+
+<div id="warehouseMessage" class="alert" style="display:none;"></div>
+
+<div class="card">
+    <div class="toolbar">
+
+        <input
+            type="text"
+            id="warehouseSearch"
+            class="form-control"
+            placeholder="🔎 بحث بالكود أو الاسم أو العنوان أو الهاتف أو المسؤول..."
+            oninput="loadWarehouses()"
+        >
+
+        <select
+            id="warehouseStatus"
+            class="form-control"
+            onchange="loadWarehouses()"
+        >
+            <option value="all">كل الحالات</option>
+            <option value="active">نشط</option>
+            <option value="inactive">غير نشط</option>
+        </select>
+
+    </div>
+</div>
+
+
+<!-- نموذج المخزن -->
+
+<div
+    id="warehouseFormCard"
+    class="card"
+    style="display:none; margin-top:20px;"
+>
+
+    <div class="card-header">
+        <h2 id="warehouseFormTitle">إضافة مخزن</h2>
+    </div>
+
+    <form onsubmit="saveWarehouse(event)">
+
+        <input type="hidden" id="warehouseId">
+
+        <div class="form-grid">
+
+            <input id="warehouseCode" type="hidden">
+
+            <div class="form-group">
+                <label for="warehouseName">اسم المخزن *</label>
+                <input
+                    id="warehouseName"
+                    class="form-control"
+                    type="text"
+                    required
+                    maxlength="200"
+                    placeholder="مثال: المخزن الرئيسي"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="warehouseAddress">العنوان</label>
+                <input
+                    id="warehouseAddress"
+                    class="form-control"
+                    type="text"
+                    maxlength="300"
+                    placeholder="عنوان المخزن"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="warehousePhone">الهاتف</label>
+                <input
+                    id="warehousePhone"
+                    class="form-control"
+                    type="text"
+                    maxlength="100"
+                    placeholder="رقم الهاتف"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="warehouseManager">مسؤول المخزن</label>
+                <input
+                    id="warehouseManager"
+                    class="form-control"
+                    type="text"
+                    maxlength="200"
+                    placeholder="اسم المسؤول"
+                >
+            </div>
+
+            <div class="form-group form-group-full">
+                <label for="warehouseDescription">الوصف</label>
+                <textarea
+                    id="warehouseDescription"
+                    class="form-control"
+                    rows="3"
+                    maxlength="1000"
+                    placeholder="وصف أو ملاحظات عن المخزن"
+                ></textarea>
+            </div>
+
+        </div>
+
+        <div class="form-actions">
+
+            <button
+                type="submit"
+                class="btn btn-primary"
+            >
+                💾 حفظ
+            </button>
+
+            <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="closeWarehouseForm()"
+            >
+                إلغاء
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+
+<!-- جدول المخازن -->
+
+<div class="card" style="margin-top:20px;">
+
+    <div class="card-header">
+        <h2>قائمة المخازن</h2>
+    </div>
+
+    <div class="table-responsive">
+
+        <table class="data-table">
+
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>الكود</th>
+                    <th>اسم المخزن</th>
+                    <th>العنوان</th>
+                    <th>الهاتف</th>
+                    <th>المسؤول</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+
+            <tbody id="warehousesTableBody">
+
+                <tr>
+                    <td colspan="8" style="text-align:center;">
+                        جاري تحميل البيانات...
+                    </td>
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+<script>
+
+let warehouses = [];
+
+
+/* =========================================================
+   الرسائل
+   ========================================================= */
+
+function showWarehouseMessage(message, type = "success") {
+
+    const box = document.getElementById("warehouseMessage");
+
+    box.textContent = message;
+
+    box.className = "alert";
+
+    if (type === "error") {
+        box.classList.add("alert-danger");
+    } else {
+        box.classList.add("alert-success");
+    }
+
+    box.style.display = "block";
+
+    setTimeout(() => {
+        box.style.display = "none";
+    }, 3500);
+}
+
+
+/* =========================================================
+   حماية HTML
+   ========================================================= */
+
+function escapeHtml(value) {
+
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+/* =========================================================
+   تحميل المخازن
+   ========================================================= */
+
+async function loadWarehouses() {
+
+    const search =
+        document.getElementById("warehouseSearch").value.trim();
+
+    const status =
+        document.getElementById("warehouseStatus").value;
+
+    const params = new URLSearchParams();
+
+    if (search) {
+        params.set("search", search);
+    }
+
+    if (status) {
+        params.set("status", status);
+    }
+
+    try {
+
+        const response = await fetch(
+            "/api/warehouses?" + params.toString()
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "تعذر تحميل المخازن");
+        }
+
+        warehouses = data.rows || [];
+
+        renderWarehouses();
+
+    } catch (error) {
+
+        showWarehouseMessage(
+            error.message || "حدث خطأ أثناء تحميل المخازن",
+            "error"
+        );
+
+    }
+}
+
+
+/* =========================================================
+   عرض المخازن
+   ========================================================= */
+
+function renderWarehouses() {
+
+    const tbody =
+        document.getElementById("warehousesTableBody");
+
+    if (!warehouses.length) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align:center;">
+                    لا توجد مخازن
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    tbody.innerHTML = warehouses.map((warehouse, index) => {
+
+        const statusBadge = warehouse.is_active
+            ? `<span class="badge badge-success">نشط</span>`
+            : `<span class="badge badge-secondary">غير نشط</span>`;
+
+        const statusButton = warehouse.is_active
+
+            ? `
+                <button
+                    type="button"
+                    class="btn btn-warning btn-sm"
+                    onclick="changeWarehouseStatus(${warehouse.id}, 'deactivate')"
+                >
+                    تعطيل
+                </button>
+              `
+
+            : `
+                <button
+                    type="button"
+                    class="btn btn-success btn-sm"
+                    onclick="changeWarehouseStatus(${warehouse.id}, 'activate')"
+                >
+                    تفعيل
+                </button>
+              `;
+
+
+        return `
+            <tr>
+
+                <td>${index + 1}</td>
+
+                <td>
+                    <strong>${escapeHtml(warehouse.code)}</strong>
+                </td>
+
+                <td>
+                    ${escapeHtml(warehouse.name)}
+                </td>
+
+                <td>
+                    ${escapeHtml(warehouse.address || "-")}
+                </td>
+
+                <td>
+                    ${escapeHtml(warehouse.phone || "-")}
+                </td>
+
+                <td>
+                    ${escapeHtml(warehouse.manager_name || "-")}
+                </td>
+
+                <td>
+                    ${statusBadge}
+                </td>
+
+                <td>
+
+                    <div class="table-actions">
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary btn-sm"
+                            onclick="editWarehouse(${warehouse.id})"
+                        >
+                            ✏️ تعديل
+                        </button>
+
+                        ${statusButton}
+
+                        <button
+                            type="button"
+                            class="btn btn-danger btn-sm"
+                            onclick="deleteWarehouse(${warehouse.id})"
+                        >
+                            🗑️ حذف
+                        </button>
+
+                    </div>
+
+                </td>
+
+            </tr>
+        `;
+
+    }).join("");
+}
+
+
+/* =========================================================
+   فتح نموذج الإضافة
+   ========================================================= */
+
+function openWarehouseForm(warehouse = null) {
+
+    document.getElementById("warehouseFormCard").style.display =
+        "block";
+
+    if (!warehouse) {
+
+        document.getElementById("warehouseFormTitle").textContent =
+            "إضافة مخزن";
+
+        document.getElementById("warehouseId").value = "";
+
+        document.getElementById("warehouseCode").value = "";
+
+        document.getElementById("warehouseName").value = "";
+
+        document.getElementById("warehouseAddress").value = "";
+
+        document.getElementById("warehousePhone").value = "";
+
+        document.getElementById("warehouseManager").value = "";
+
+        document.getElementById("warehouseDescription").value = "";
+
+    } else {
+
+        document.getElementById("warehouseFormTitle").textContent =
+            "تعديل المخزن";
+
+        document.getElementById("warehouseId").value =
+            warehouse.id;
+
+        document.getElementById("warehouseCode").value =
+            warehouse.code || "";
+
+        document.getElementById("warehouseName").value =
+            warehouse.name || "";
+
+        document.getElementById("warehouseAddress").value =
+            warehouse.address || "";
+
+        document.getElementById("warehousePhone").value =
+            warehouse.phone || "";
+
+        document.getElementById("warehouseManager").value =
+            warehouse.manager_name || "";
+
+        document.getElementById("warehouseDescription").value =
+            warehouse.description || "";
+    }
+
+    document.getElementById("warehouseCode").focus();
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
+
+
+/* =========================================================
+   إغلاق النموذج
+   ========================================================= */
+
+function closeWarehouseForm() {
+
+    document.getElementById("warehouseFormCard").style.display =
+        "none";
+}
+
+
+/* =========================================================
+   حفظ المخزن
+   ========================================================= */
+
+async function saveWarehouse(event) {
+
+    event.preventDefault();
+
+    const id =
+        document.getElementById("warehouseId").value.trim();
+
+    const payload = {
+
+        code:
+            document.getElementById("warehouseCode").value.trim(),
+
+        name:
+            document.getElementById("warehouseName").value.trim(),
+
+        address:
+            document.getElementById("warehouseAddress").value.trim(),
+
+        phone:
+            document.getElementById("warehousePhone").value.trim(),
+
+        manager_name:
+            document.getElementById("warehouseManager").value.trim(),
+
+        description:
+            document.getElementById("warehouseDescription").value.trim()
+    };
+
+
+
+    if (!payload.name) {
+
+        showWarehouseMessage(
+            "اسم المخزن مطلوب",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const url = id
+        ? `/api/warehouses/${id}`
+        : "/api/warehouses";
+
+    const method = id
+        ? "PUT"
+        : "POST";
+
+
+    try {
+
+        const response = await fetch(url, {
+
+            method: method,
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify(payload)
+        });
+
+
+        const data = await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "تعذر حفظ المخزن"
+            );
+        }
+
+
+        showWarehouseMessage(
+            id
+                ? "تم تعديل المخزن بنجاح"
+                : "تم إضافة المخزن بنجاح"
+        );
+
+
+        closeWarehouseForm();
+
+        await loadWarehouses();
+
+    } catch (error) {
+
+        showWarehouseMessage(
+            error.message ||
+            "حدث خطأ أثناء حفظ المخزن",
+            "error"
+        );
+
+    }
+}
+
+
+/* =========================================================
+   تعديل مخزن
+   ========================================================= */
+
+function editWarehouse(id) {
+
+    const warehouse =
+        warehouses.find(item => item.id === id);
+
+    if (!warehouse) {
+
+        showWarehouseMessage(
+            "المخزن غير موجود",
+            "error"
+        );
+
+        return;
+    }
+
+    openWarehouseForm(warehouse);
+}
+
+
+/* =========================================================
+   تفعيل / تعطيل
+   ========================================================= */
+
+async function changeWarehouseStatus(id, action) {
+
+    const warehouse =
+        warehouses.find(item => item.id === id);
+
+    if (!warehouse) {
+        return;
+    }
+
+
+    const actionText =
+        action === "activate"
+            ? "تفعيل"
+            : "تعطيل";
+
+
+    if (!confirm(
+        `هل تريد ${actionText} المخزن "${warehouse.name}"؟`
+    )) {
+        return;
+    }
+
+
+    try {
+
+        const response = await fetch(
+            `/api/warehouses/${id}/${action}`,
+            {
+                method: "POST"
+            }
+        );
+
+
+        const data = await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                `تعذر ${actionText} المخزن`
+            );
+        }
+
+
+        showWarehouseMessage(
+            action === "activate"
+                ? "تم تفعيل المخزن"
+                : "تم تعطيل المخزن"
+        );
+
+
+        await loadWarehouses();
+
+    } catch (error) {
+
+        showWarehouseMessage(
+            error.message ||
+            "حدث خطأ",
+            "error"
+        );
+
+    }
+}
+
+
+/* =========================================================
+   حذف مخزن
+   ========================================================= */
+
+async function deleteWarehouse(id) {
+
+    const warehouse =
+        warehouses.find(item => item.id === id);
+
+    if (!warehouse) {
+        return;
+    }
+
+
+    if (!confirm(
+        `هل أنت متأكد من حذف المخزن "${warehouse.name}"؟`
+    )) {
+        return;
+    }
+
+
+    try {
+
+        const response = await fetch(
+            `/api/warehouses/${id}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+
+        const data = await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                "تعذر حذف المخزن"
+            );
+        }
+
+
+        showWarehouseMessage(
+            "تم حذف المخزن بنجاح"
+        );
+
+
+        await loadWarehouses();
+
+    } catch (error) {
+
+        showWarehouseMessage(
+            error.message ||
+            "حدث خطأ أثناء حذف المخزن",
+            "error"
+        );
+
+    }
+}
+
+
+/* =========================================================
+   تشغيل الصفحة
+   ========================================================= */
+
+function initWarehousesPage() {
+
+    loadWarehouses();
+
+}
+
+
+/* =========================================================
+   بدء الصفحة
+   ========================================================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    initWarehousesPage
+);
+
+</script>
+
+{% endblock %}

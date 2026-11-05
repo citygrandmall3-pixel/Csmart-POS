@@ -39,22 +39,43 @@
 <body>
     <h1>📦 مخزن الكاشير (POS)</h1>
 
+    <style>
+      .pos-add-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+      .pos-add-grid label{display:flex;flex-direction:column;gap:5px;font-size:14px}
+      .pos-add-grid input,.pos-add-grid select,.pos-add-grid textarea{box-sizing:border-box;width:100%;margin:0;background:#171725;color:#fff;border:1px solid #565675}
+      .pos-add-grid .full{grid-column:1/-1}
+      .pos-add-checks{display:flex;gap:16px;flex-wrap:wrap}
+      .pos-add-checks label{display:flex;align-items:center;flex-direction:row}
+      @media(max-width:650px){.pos-add-grid{grid-template-columns:1fr}.pos-add-grid .full{grid-column:auto}}
+    </style>
     <div class="card">
-        <h2>إضافة منتج سريع</h2>
-        <input type="text" id="code" placeholder="كود المنتج (اتركه فارغاً للتوليد التلقائي)">
-        <input type="text" id="name" placeholder="اسم المنتج">
-        <select id="unit" onchange="updateUnitLabel()">
-            <option value="2">قطعة</option>
-            <option value="3">كيلو</option>
-        </select>
-        <input type="number" id="buy" placeholder="سعر الشراء">
-        <input type="number" id="sell" placeholder="سعر البيع">
-        <input type="number" id="qty" placeholder="الكمية">
-        <span id="unitLabel" style="margin-right:10px;font-size:14px;color:#aaa;">قطعة</span>
-        <button onclick="addProduct()">حفظ</button>
+        <h2>إضافة صنف كامل</h2>
+        <p style="color:#c5c5d8;font-size:13px">كود الصنف يُنشأ تلقائيًا، والكمية الافتتاحية تُسجل في المخزن الافتراضي المحدد للشركة.</p>
+        <div class="pos-add-grid">
+            <label>اسم الصنف *<input id="name" type="text" maxlength="180" required></label>
+            <label>التصنيف<select id="category"><option value="">بدون تصنيف</option></select></label>
+            <label>وحدة القياس الأساسية *<select id="unit" required><option value="">تحميل الوحدات...</option></select></label>
+            <label>العلامة التجارية<input id="brand" type="text" maxlength="120"></label>
+            <label>الموديل<input id="model" type="text" maxlength="120"></label>
+            <label>سعر الشراء<input id="buy" type="number" min="0" step="0.01" value="0"></label>
+            <label>سعر البيع<input id="sell" type="number" min="0" step="0.01" value="0"></label>
+            <label>الكمية الافتتاحية<input id="qty" type="number" min="0" step="any" value="0"></label>
+            <label>الحد الأدنى للمخزون<input id="minStock" type="number" min="0" step="any" value="0"></label>
+            <label>الحد الأقصى للمخزون<input id="maxStock" type="number" min="0" step="any" value="0"></label>
+            <label class="full">الوصف<textarea id="description" rows="2"></textarea></label>
+            <label class="full">المواصفات<textarea id="specifications" rows="3"></textarea></label>
+            <div class="full pos-add-checks">
+                <label><input id="isStock" type="checkbox" checked> صنف مخزني</label>
+                <label><input id="allowDecimal" type="checkbox" checked> السماح بالكميات العشرية</label>
+                <label><input id="trackExpiry" type="checkbox"> تتبع الصلاحية</label>
+                <label><input id="trackLot" type="checkbox"> تتبع التشغيلة</label>
+                <label><input id="trackSerial" type="checkbox"> تتبع الرقم التسلسلي</label>
+            </div>
+        </div>
+        <button type="button" onclick="addProduct()">حفظ الصنف</button>
     </div>
     <div class="card">
-        <h2>المنتجات في المخزن</h2>
+        <h2>المنتجات في المخزن <small id="posWarehouseTitle" style="font-size:13px;color:#c5c5d8"></small></h2>
         <table id="productTable">
             <thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>السعر</th><th>الإجراءات</th></tr></thead>
             <tbody><tr><td colspan="5">جاري التحميل...</td></tr></tbody>
@@ -129,6 +150,8 @@
             try {
                 const json = await posRequestJson("/api/pos-inventory");
                 posInventoryProducts = Array.isArray(json.products) ? json.products : [];
+                const warehouseTitle = document.getElementById("posWarehouseTitle");
+                if (warehouseTitle) warehouseTitle.textContent = json.warehouse ? " — " + json.warehouse.name : "";
                 if (!posInventoryProducts.length) {
                     tbody.innerHTML = '<tr><td colspan="5">لا توجد منتجات</td></tr>';
                     return;
@@ -145,22 +168,63 @@
             }
         }
 
+        async function loadPosLookups() {
+            const [unitsData, categoriesData] = await Promise.all([
+                posRequestJson("/api/units"),
+                posRequestJson("/api/product-categories")
+            ]);
+            const unitSelect = document.getElementById("unit");
+            unitSelect.innerHTML = '<option value="">اختر الوحدة</option>';
+            (unitsData.items || []).filter(x => Number(x.is_active) === 1).forEach(unit => {
+                const option = document.createElement("option");
+                option.value = unit.id;
+                option.textContent = (unit.code ? unit.code + " - " : "") + unit.name + (unit.symbol ? " (" + unit.symbol + ")" : "");
+                unitSelect.appendChild(option);
+            });
+            const categorySelect = document.getElementById("category");
+            categorySelect.innerHTML = '<option value="">بدون تصنيف</option>';
+            (categoriesData.items || []).filter(x => Number(x.is_active) === 1).forEach(category => {
+                const option = document.createElement("option");
+                option.value = category.id;
+                option.textContent = (category.code ? category.code + " - " : "") + category.name;
+                categorySelect.appendChild(option);
+            });
+        }
+
         async function addProduct() {
             const data = {
-                code: document.getElementById("code").value,
-                name: document.getElementById("name").value,
+                name: document.getElementById("name").value.trim(),
+                category_id: document.getElementById("category").value || null,
                 unit_id: document.getElementById("unit").value,
+                brand: document.getElementById("brand").value.trim(),
+                model: document.getElementById("model").value.trim(),
+                description: document.getElementById("description").value.trim(),
+                specifications: document.getElementById("specifications").value.trim(),
                 buy_price: document.getElementById("buy").value,
                 sell_price: document.getElementById("sell").value,
-                qty: document.getElementById("qty").value
+                qty: document.getElementById("qty").value,
+                min_stock: document.getElementById("minStock").value,
+                max_stock: document.getElementById("maxStock").value,
+                is_stock_item: document.getElementById("isStock").checked,
+                allow_decimal_qty: document.getElementById("allowDecimal").checked,
+                track_expiry: document.getElementById("trackExpiry").checked,
+                track_lot: document.getElementById("trackLot").checked,
+                track_serial: document.getElementById("trackSerial").checked
             };
+            if (!data.name) { posNotify("اسم الصنف مطلوب", "warning"); return; }
+            if (!data.unit_id) { posNotify("اختر وحدة القياس", "warning"); return; }
             try {
                 const json = await posRequestJson("/api/pos-inventory/quick-add", {
                     method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data)
                 });
                 posNotify(json.message || "تمت إضافة الصنف", "success");
-                ["code","name","buy","sell","qty"].forEach(id => document.getElementById(id).value = "");
-                loadProducts();
+                ["name","brand","model","description","specifications"].forEach(id => document.getElementById(id).value = "");
+                ["buy","sell","qty","minStock","maxStock"].forEach(id => document.getElementById(id).value = "0");
+                document.getElementById("category").value = "";
+                document.getElementById("isStock").checked = true;
+                document.getElementById("allowDecimal").checked = true;
+                ["trackExpiry","trackLot","trackSerial"].forEach(id => document.getElementById(id).checked = false);
+                await loadProducts();
             } catch (error) { posNotify(error.message || "تعذرت إضافة الصنف", "error"); }
         }
 
@@ -300,7 +364,7 @@
             else if (document.getElementById("posProductEditModal").style.display === "flex") closePosProductEdit();
         });
 
-        window.onload = loadProducts;
+        window.onload = async () => { try { await loadPosLookups(); await loadProducts(); } catch (error) { posNotify(error.message || "تعذر تحميل بيانات الصنف", "error"); } };
     </script>
 
 <script>

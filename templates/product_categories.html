@@ -1,0 +1,853 @@
+{% extends "base.html" %}
+
+{% block title %}تصنيفات المنتجات{% endblock %}
+
+{% block page_title %}تصنيفات المنتجات{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1>تصنيفات المنتجات</h1>
+        <p>إدارة تصنيفات المنتجات وإنشاء شجرة التصنيفات</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="toolbar">
+
+        <input
+            id="searchInput"
+            type="text"
+            placeholder="بحث بالكود أو اسم التصنيف أو التصنيف الأب..."
+            oninput="renderCategories()"
+        >
+
+        <select id="statusFilter" onchange="renderCategories()">
+            <option value="">كل الحالات</option>
+            <option value="1">نشط</option>
+            <option value="0">غير نشط</option>
+        </select>
+
+        <button
+            class="btn btn-primary"
+            type="button"
+            onclick="openForm()">
+            + إضافة تصنيف
+        </button>
+
+    </div>
+</div>
+
+
+<div class="card" id="categoryFormCard" style="display:none;">
+
+    <h2 id="formTitle">إضافة تصنيف منتج</h2>
+
+    <form id="categoryForm" onsubmit="saveCategory(event)">
+
+        <input type="hidden" id="categoryId">
+
+        <div class="form-grid">
+
+            <input id="code" type="hidden">
+
+
+            <div>
+                <label>اسم التصنيف *</label>
+                <input
+                    id="name"
+                    required
+                    maxlength="150"
+                    placeholder="مثال: كاميرات المراقبة">
+            </div>
+
+
+            <div>
+                <label>التصنيف الأب</label>
+
+                <select id="parentId">
+                    <option value="">— تصنيف رئيسي —</option>
+                </select>
+
+            </div>
+
+
+            <div>
+                <label>الحالة</label>
+
+                <select id="isActive">
+                    <option value="1">نشط</option>
+                    <option value="0">غير نشط</option>
+                </select>
+
+            </div>
+
+
+            <div class="full">
+
+                <label>الوصف</label>
+
+                <textarea
+                    id="description"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="وصف مختصر للتصنيف..."></textarea>
+
+            </div>
+
+        </div>
+
+
+        <div class="form-actions">
+
+            <button
+                class="btn btn-primary"
+                type="submit">
+                حفظ
+            </button>
+
+            <button
+                class="btn"
+                type="button"
+                onclick="closeForm()">
+                إلغاء
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+
+<div class="card">
+
+    <div class="table-wrap">
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>#</th>
+                    <th>الكود</th>
+                    <th>اسم التصنيف</th>
+                    <th>التصنيف الأب</th>
+                    <th>الوصف</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
+                </tr>
+
+            </thead>
+
+
+            <tbody id="categoriesTable">
+
+                <tr>
+                    <td colspan="7">
+                        جاري التحميل...
+                    </td>
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+<script>
+
+let categories = [];
+
+
+function esc(value) {
+
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+async function loadCategories() {
+
+    try {
+
+        const response =
+            await fetch("/api/product-categories");
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error || "تعذر تحميل التصنيفات"
+            );
+
+        }
+
+        categories =
+            data.items || [];
+
+        updateParentOptions();
+
+        renderCategories();
+
+    } catch (error) {
+
+        document.getElementById(
+            "categoriesTable"
+        ).innerHTML =
+            `<tr>
+                <td colspan="7">
+                    خطأ: ${esc(error.message)}
+                </td>
+            </tr>`;
+
+    }
+
+}
+
+
+function renderCategories() {
+
+    const tbody =
+        document.getElementById("categoriesTable");
+
+    const q =
+        document.getElementById("searchInput")
+            .value
+            .trim()
+            .toLowerCase();
+
+    const status =
+        document.getElementById("statusFilter")
+            .value;
+
+
+    const filtered =
+        categories.filter(category => {
+
+            const text = [
+                category.code,
+                category.name,
+                category.parent_name,
+                category.description
+            ]
+            .join(" ")
+            .toLowerCase();
+
+
+            const matchesSearch =
+                !q || text.includes(q);
+
+
+            const matchesStatus =
+                status === "" ||
+                String(category.is_active) === status;
+
+
+            return matchesSearch &&
+                   matchesStatus;
+
+        });
+
+
+    if (!filtered.length) {
+
+        tbody.innerHTML =
+            `<tr>
+                <td colspan="7">
+                    لا توجد بيانات.
+                </td>
+            </tr>`;
+
+        return;
+
+    }
+
+
+    tbody.innerHTML =
+        filtered.map((category, index) => {
+
+            const active =
+                Number(category.is_active) === 1;
+
+
+            const statusText =
+                active
+                    ? "نشط"
+                    : "غير نشط";
+
+
+            const parentText =
+                category.parent_name
+                    ? category.parent_name
+                    : "—";
+
+
+            return `
+                <tr>
+
+                    <td>${index + 1}</td>
+
+                    <td>
+                        ${esc(category.code)}
+                    </td>
+
+                    <td>
+                        <strong>
+                            ${esc(category.name)}
+                        </strong>
+                    </td>
+
+                    <td>
+                        ${esc(parentText)}
+                    </td>
+
+                    <td>
+                        ${esc(
+                            category.description || "—"
+                        )}
+                    </td>
+
+                    <td>
+                        ${statusText}
+                    </td>
+
+                    <td>
+
+                        <button
+                            class="btn"
+                            type="button"
+                            onclick="editCategory(${category.id})">
+                            تعديل
+                        </button>
+
+
+                        ${
+                            active
+                            ? `
+                                <button
+                                    class="btn"
+                                    type="button"
+                                    onclick="toggleCategory(
+                                        ${category.id},
+                                        false
+                                    )">
+                                    تعطيل
+                                </button>
+                              `
+                            : `
+                                <button
+                                    class="btn"
+                                    type="button"
+                                    onclick="toggleCategory(
+                                        ${category.id},
+                                        true
+                                    )">
+                                    تفعيل
+                                </button>
+                              `
+                        }
+
+
+                        <button
+                            class="btn btn-danger"
+                            type="button"
+                            onclick="deleteCategory(${category.id})">
+                            حذف
+                        </button>
+
+                    </td>
+
+                </tr>
+            `;
+
+        }).join("");
+
+}
+
+
+function updateParentOptions(
+    selectedId = null
+) {
+
+    const select =
+        document.getElementById("parentId");
+
+
+    const currentId =
+        selectedId !== null
+            ? Number(selectedId)
+            : Number(
+                document.getElementById(
+                    "categoryId"
+                ).value || 0
+              );
+
+
+    const options = [
+        `<option value="">
+            — تصنيف رئيسي —
+        </option>`
+    ];
+
+
+    categories
+        .filter(category =>
+            Number(category.id) !== currentId
+        )
+        .sort((a, b) =>
+            String(a.code)
+                .localeCompare(
+                    String(b.code),
+                    "ar"
+                )
+        )
+        .forEach(category => {
+
+            options.push(
+                `<option value="${category.id}">
+                    ${esc(category.code)}
+                    — ${esc(category.name)}
+                </option>`
+            );
+
+        });
+
+
+    select.innerHTML =
+        options.join("");
+
+}
+
+
+function openForm(category = null) {
+
+    document.getElementById(
+        "categoryFormCard"
+    ).style.display = "block";
+
+
+    if (!category) {
+
+        document.getElementById(
+            "formTitle"
+        ).textContent =
+            "إضافة تصنيف منتج";
+
+
+        document.getElementById(
+            "categoryForm"
+        ).reset();
+
+
+        document.getElementById(
+            "categoryId"
+        ).value = "";
+
+
+        document.getElementById(
+            "isActive"
+        ).value = "1";
+
+
+        updateParentOptions();
+
+
+        window.scrollTo({
+            top: 0,
+            behavior: "smooth"
+        });
+
+        return;
+
+    }
+
+
+    document.getElementById(
+        "formTitle"
+    ).textContent =
+        "تعديل تصنيف منتج";
+
+
+    document.getElementById(
+        "categoryId"
+    ).value =
+        category.id;
+
+
+    document.getElementById(
+        "code"
+    ).value =
+        category.code || "";
+
+
+    document.getElementById(
+        "name"
+    ).value =
+        category.name || "";
+
+
+    document.getElementById(
+        "description"
+    ).value =
+        category.description || "";
+
+
+    document.getElementById(
+        "isActive"
+    ).value =
+        Number(category.is_active) === 1
+            ? "1"
+            : "0";
+
+
+    updateParentOptions(
+        category.id
+    );
+
+
+    document.getElementById(
+        "parentId"
+    ).value =
+        category.parent_id || "";
+
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+
+}
+
+
+function closeForm() {
+
+    document.getElementById(
+        "categoryFormCard"
+    ).style.display =
+        "none";
+
+
+    document.getElementById(
+        "categoryForm"
+    ).reset();
+
+
+    document.getElementById(
+        "categoryId"
+    ).value = "";
+
+}
+
+
+function editCategory(id) {
+
+    const category =
+        categories.find(
+            item =>
+                Number(item.id) === Number(id)
+        );
+
+
+    if (!category) {
+
+        alert(
+            "التصنيف غير موجود."
+        );
+
+        return;
+
+    }
+
+
+    openForm(category);
+
+}
+
+
+async function saveCategory(event) {
+
+    event.preventDefault();
+
+
+    const id =
+        document.getElementById(
+            "categoryId"
+        ).value.trim();
+
+
+    const parentValue =
+        document.getElementById(
+            "parentId"
+        ).value;
+
+
+    const data = {
+
+        code:
+            document.getElementById(
+                "code"
+            ).value.trim(),
+
+        name:
+            document.getElementById(
+                "name"
+            ).value.trim(),
+
+        parent_id:
+            parentValue
+                ? Number(parentValue)
+                : null,
+
+        description:
+            document.getElementById(
+                "description"
+            ).value.trim(),
+
+        is_active:
+            document.getElementById(
+                "isActive"
+            ).value === "1"
+
+    };
+
+
+    const url =
+        id
+            ? `/api/product-categories/${id}`
+            : "/api/product-categories";
+
+
+    const method =
+        id
+            ? "PUT"
+            : "POST";
+
+
+    try {
+
+        const response =
+            await fetch(url, {
+
+                method,
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body:
+                    JSON.stringify(data)
+
+            });
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.error ||
+                "تعذر حفظ التصنيف"
+            );
+
+        }
+
+
+        alert(
+            id
+                ? "تم تعديل التصنيف بنجاح."
+                : "تمت إضافة التصنيف بنجاح."
+        );
+
+
+        closeForm();
+
+        await loadCategories();
+
+
+    } catch (error) {
+
+        alert(error.message);
+
+    }
+
+}
+
+
+async function toggleCategory(
+    id,
+    activate
+) {
+
+    const category =
+        categories.find(
+            item =>
+                Number(item.id) === Number(id)
+        );
+
+
+    if (!category) {
+        return;
+    }
+
+
+    const action =
+        activate
+            ? "تفعيل"
+            : "تعطيل";
+
+
+    const confirmed =
+        confirm(
+            `هل تريد ${action} التصنيف:\n\n` +
+            category.name +
+            " ؟"
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `/api/product-categories/${id}/${
+                    activate
+                        ? "activate"
+                        : "deactivate"
+                }`,
+                {
+                    method: "POST"
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.error ||
+                `تعذر ${action} التصنيف`
+            );
+
+        }
+
+
+        alert(
+            activate
+                ? "تم تفعيل التصنيف."
+                : "تم تعطيل التصنيف."
+        );
+
+
+        await loadCategories();
+
+
+    } catch (error) {
+
+        alert(error.message);
+
+    }
+
+}
+
+
+async function deleteCategory(id) {
+
+    const category =
+        categories.find(
+            item =>
+                Number(item.id) === Number(id)
+        );
+
+
+    if (!category) {
+        return;
+    }
+
+
+    const confirmed =
+        confirm(
+            "هل أنت متأكد من حذف التصنيف:\n\n" +
+            category.name +
+            "\n\n" +
+            "لن يسمح النظام بالحذف إذا كان للتصنيف " +
+            "تصنيفات فرعية أو منتجات مرتبطة به."
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `/api/product-categories/${id}`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.error ||
+                "تعذر حذف التصنيف"
+            );
+
+        }
+
+
+        alert(
+            "تم حذف التصنيف بنجاح."
+        );
+
+
+        await loadCategories();
+
+
+    } catch (error) {
+
+        alert(error.message);
+
+    }
+
+}
+
+
+loadCategories();
+
+</script>
+
+{% endblock %}
