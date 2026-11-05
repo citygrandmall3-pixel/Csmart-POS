@@ -9021,7 +9021,7 @@ def api_users_role(uid):
         return jsonify(error="المستخدم غير موجود"), 404
 
     if g.user["role"] == "dev" and u["role"] == "admin":\n        return jsonify(error="لا يستطيع مطور النظام تعديل حساب المدير"), 403\n\n    # منع المدير من تخفيض صلاحية حسابه الحالي
-    if uid == g.user["id"] and role != "admin":
+    if g.user["role"] == "dev" and u["role"] == "admin":\n        return jsonify(error="لا يستطيع مطور النظام تعديل حساب المدير"), 403\n\n    if uid == g.user["id"] and role != "admin":
         return jsonify(error="لا يمكنك تخفيض صلاحية حسابك الحالي"), 400
 
     # منع إزالة صلاحية آخر مدير
