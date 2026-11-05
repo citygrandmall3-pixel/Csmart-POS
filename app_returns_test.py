@@ -13039,7 +13039,8 @@ def api_returns_execute():
     if sale_id <= 0 or not requested:
         return jsonify(ok=False, error="حدد الفاتورة والأصناف والكميات الصحيحة"), 400
 
-    company_id = _current_company_id()    if not company_id:
+    company_id = _current_company_id()
+    if not company_id:
         return jsonify(ok=False, error="تعذر تحديد الشركة الحالية"), 400
 
     reason = str(data.get("reason") or "مرتجع نقدي").strip()[:250]
