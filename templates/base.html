@@ -246,7 +246,7 @@
     </div>
   </div>
 
-  {% if user.role == 'admin' %}
+  {% if user.role in ('admin', 'dev') %}
   <div class="top-menu-group">
     <button type="button" class="top-menu-btn">⚙️ الإدارة <span>▼</span></button>
     <div class="top-menu-dropdown">
@@ -294,12 +294,12 @@
       {% for url, ic, label in nav %}
       <a href="{{ url }}" class="{{ 'active' if request.path == url }}"><span class="ic">{{ ic }}</span>{{ label }}</a>
       {% endfor %}
-      {% if user.role == 'admin' %}
+      {% if user.role in ('admin', 'dev') %}
       <a href="/users" class="{{ 'active' if request.path == '/users' }}"><span class="ic">👥</span>المستخدمون</a>
-      <a href="/audit" class="{{ 'active' if request.path == '/audit' }}"><span class="ic">🛡️</span>سجل العمليات</a>
+      {% if user.role == 'admin' %}<a href="/audit" class="{{ 'active' if request.path == '/audit' }}"><span class="ic">🛡️</span>سجل العمليات</a>{% endif %}
       {% endif %}
       <a href="/help" class="{{ 'active' if request.path == '/help' }}"><span class="ic">📘</span>دليل الاستخدام</a>
-      <a href="/settings" class="{{ 'active' if request.path == '/settings' }}"><span class="ic">⚙️</span>الإعدادات</a>
+      {% if user.role == 'admin' %}<a href="/settings" class="{{ 'active' if request.path == '/settings' }}"><span class="ic">⚙️</span>الإعدادات</a>{% endif %}
       <a href="/logout"><span class="ic">🚪</span>تسجيل الخروج</a>
     </nav>
     <div class="side-footer">
