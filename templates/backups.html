@@ -2,7 +2,9 @@
 {% block content %}
 <div class="card" style="padding:20px;">
     <h2>💾 النسخ الاحتياطية المتاحة</h2>
-    <p>هذه الصفحة تعرض جميع النسخ الاحتياطية المحفوظة على الخادم.</p>
+    <p>هذه الصفحة تعرض النسخ الاحتياطية وتتيح إنشاء نسخة أو استعادة نسخة محفوظة.</p>
+    <button class="btn btn-gold" type="button" onclick="createBackup()">إنشاء نسخة احتياطية الآن</button>
+    <span id="backupMessage" style="margin-right:10px;"></span>
     <table style="width:100%; border-collapse:collapse; margin-top:15px;">
         <thead>
             <tr style="background:#1e1e2f; color:#ffc107;">
@@ -21,6 +23,7 @@
                         <td style="padding:8px; border:1px solid #444;">{{ b.size }} bytes</td>
                         <td style="padding:8px; border:1px solid #444;">
                             <a href="/api/backups/{{ b.name }}" class="btn btn-sm btn-teal">⬇️ تنزيل</a>
+                            <button type="button" class="btn btn-sm btn-gold" onclick="restoreBackup({{ b.name|tojson }})">استعادة</button>
                         </td>
                     </tr>
                 {% endfor %}
@@ -33,4 +36,36 @@
         <a href="/settings" class="btn btn-gold">⬅️ العودة للإعدادات</a>
     </div>
 </div>
+<script>
+const BACKUP_USER_ROLE = {{ user_role|tojson }};
+async function createBackup() {
+    const msg = document.getElementById('backupMessage');
+    msg.innerText = 'جاري إنشاء النسخة...';
+    try {
+        const r = await fetch('/api/backup', {method:'POST'});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'تعذر إنشاء النسخة');
+        msg.innerText = d.name ? 'تم إنشاء النسخة: ' + d.name : 'تم إنشاء النسخة بنجاح';
+        location.reload();
+    } catch(e) { msg.innerText = e.message; }
+}
+async function restoreBackup(name) {
+    if (!confirm('سيتم استبدال بيانات النظام ببيانات النسخة المحددة. هل تريد المتابعة؟')) return;
+    const body = {};
+    if (BACKUP_USER_ROLE === 'dev') {
+        const password = prompt('أدخل كلمة مرور المطور المستقلة لتأكيد الاستعادة:');
+        if (!password) return;
+        body.dev_password = password;
+    }
+    try {
+        const r = await fetch('/api/restore/' + encodeURIComponent(name), {
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'فشلت الاستعادة');
+        alert(d.message || 'تمت الاستعادة. أعد تسجيل الدخول.');
+        location.reload();
+    } catch(e) { alert(e.message); }
+}
+</script>
 {% endblock %}
