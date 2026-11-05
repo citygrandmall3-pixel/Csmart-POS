@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""نظام الحسابات المتكامل — محاسب / أحمد عبدالله"""
+"""نظام الحسابات المتكامل — محاسب / خالد عبد الرحمن"""
 from datetime import date, datetime, timedelta
 from functools import wraps
 import collections
