@@ -155,6 +155,40 @@ def dev_or_admin_required(f):
     return wrapper
 
 
+def dev_admin_master_required(f):
+    """يسمح للمدير، ويشترط كلمة مرور المطور المستقلة عند تنفيذ DEV لعملية حساسة."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if g.user["role"] == "admin":
+            return f(*args, **kwargs)
+        if g.user["role"] != "dev":
+            return jsonify(error="هذه العملية للمدير أو مطور النظام فقط"), 403
+        supplied = request.headers.get("X-DEV-Password", "")
+        if not supplied:
+            data = request.get_json(silent=True) or {}
+            supplied = data.get("dev_password") or request.form.get("dev_password", "")
+        stored = db.get_setting("dev_master_password_hash", "")
+        if not stored or not supplied or not check_password_hash(stored, supplied):
+            return jsonify(error="كلمة مرور المطور المستقلة مطلوبة أو غير صحيحة"), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+@app.route("/api/dev-security/password", methods=["POST"])
+@admin_required
+def api_set_dev_master_password():
+    data = request.get_json(silent=True) or {}
+    current_password = data.get("current_password") or ""
+    new_password = data.get("new_password") or ""
+    if not check_password_hash(g.user["password_hash"], current_password):
+        return jsonify(error="كلمة مرور المدير الحالية غير صحيحة"), 403
+    if len(new_password) < 12 or not re.search(r"[A-Za-z]", new_password) or not re.search(r"\\d", new_password):
+        return jsonify(error="كلمة مرور المطور يجب أن تكون 12 حرفًا على الأقل وتحتوي على حروف وأرقام"), 400
+    db.set_setting("dev_master_password_hash", generate_password_hash(new_password))
+    db.audit(g.user["full_name"], "تعيين كلمة مرور المطور المستقلة")
+    return jsonify(ok=True, message="تم حفظ كلمة مرور المطور بشكل مشفر")
+
+
 # ------------------------------------------------------------------
 # سياق عام للقوالب
 # ------------------------------------------------------------------
@@ -9541,7 +9575,7 @@ def api_settings():
 # ------------------------------------------------------------------
 
 @app.route("/api/backup", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_backup_create():
     try:
         name = db.create_backup(prefix="manual")
@@ -9552,13 +9586,13 @@ def api_backup_create():
 
 
 @app.route("/api/backups")
-@admin_required
+@dev_or_admin_required
 def api_backups_list():
     return jsonify(backups=db.list_backups())
 
 
 @app.route("/api/backups/<name>")
-@admin_required
+@dev_or_admin_required
 def api_backup_download(name):
     import re as _re
     if not db.SAFE_BACKUP_NAME.match(name):
@@ -9570,7 +9604,7 @@ def api_backup_download(name):
 
 
 @app.route("/api/restore/<name>", methods=["POST"])
-@admin_required
+@dev_admin_master_required
 def api_backup_restore(name):
     try:
         db.restore_backup(name)
@@ -9583,7 +9617,7 @@ def api_backup_restore(name):
 
 
 @app.route("/api/restore-upload", methods=["POST"])
-@admin_required
+@dev_admin_master_required
 def api_backup_restore_upload():
     import sqlite3
     upload = request.files.get("file")
@@ -11950,7 +11984,7 @@ def api_send_backup():
     return jsonify(ok=success, message=message)
 
 @app.route("/api/backup-settings", methods=["GET"])
-@admin_required
+@dev_or_admin_required
 def api_get_backup_settings():
     company_id = _current_company_id()
     if not company_id:
@@ -11962,7 +11996,7 @@ def api_get_backup_settings():
     return jsonify(ok=True, settings=s)
 
 @app.route("/api/backup-settings", methods=["POST"])
-@admin_required
+@dev_admin_master_required
 def api_save_backup_settings():
     company_id = _current_company_id()
     if not company_id:
@@ -11983,7 +12017,7 @@ def api_save_backup_settings():
     return jsonify(ok=True)
 
 @app.route("/api/backup-test", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_backup_test():
     from email_backup import send_backup_email
     try:
@@ -12031,6 +12065,7 @@ if __name__ == "__main__":
     
 
 @app.route("/api/create-backup", methods=["POST"])
+@dev_or_admin_required
 def api_create_backup():
     try:
         import database as db
@@ -12042,6 +12077,7 @@ def api_create_backup():
 
 
 @app.route("/api/local-backup", methods=["POST"])
+@dev_or_admin_required
 def api_local_backup():
     try:
         # 1. إنشاء نسخة في مجلد البرنامج (لتظهر في القائمة)
@@ -12462,6 +12498,7 @@ def api_invoice_settings_get():
 
 
 @app.route("/backups", methods=["GET"])
+@dev_or_admin_required
 def backups_page():
     try:
         backups_list = db.list_backups()
