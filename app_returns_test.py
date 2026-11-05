@@ -12340,8 +12340,11 @@ def api_report_expenses():
 @app.route("/api/reports/stock", methods=["GET"])
 def api_report_stock():
     try:
+        company_id = _current_company_id()
+        if not company_id:
+            return jsonify(ok=False, error="لا توجد شركة حالية"), 400
         with db.connect() as conn:
-            warehouse = _get_pos_inventory_warehouse(conn, _current_company_id())
+            warehouse = _get_pos_inventory_warehouse(conn, company_id)
             warehouse_id = warehouse["id"]
         stock = db.query("SELECT p.name, p.code, COALESCE(ws.quantity, 0) AS quantity FROM products p LEFT JOIN warehouse_stock ws ON ws.product_id = p.id AND ws.warehouse_id = ? WHERE p.is_active=1 ORDER BY quantity ASC LIMIT 20", (warehouse_id,))
         return jsonify(ok=True, stock=stock)
