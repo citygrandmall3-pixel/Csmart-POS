@@ -253,6 +253,7 @@
       <a href="/delivery">🚚 التوصيل</a>
     {% if user.role == 'admin' %}<a href="/settings">⚙️ إعدادات عامة</a>{% endif %}
       <a href="/users">👥 المستخدمون</a>
+      {% if user.role in ('admin', 'dev') %}<a href="/backups">💾 النسخ الاحتياطية</a>{% endif %}
       {% if user.role == 'admin' %}<a href="/audit">🛡️ سجل العمليات</a>{% endif %}
       
     </div>
@@ -296,6 +297,7 @@
       {% endfor %}
       {% if user.role in ('admin', 'dev') %}
       <a href="/users" class="{{ 'active' if request.path == '/users' }}"><span class="ic">👥</span>المستخدمون</a>
+      <a href="/backups" class="{{ 'active' if request.path == '/backups' }}"><span class="ic">💾</span>النسخ الاحتياطية</a>
       {% if user.role == 'admin' %}<a href="/audit" class="{{ 'active' if request.path == '/audit' }}"><span class="ic">🛡️</span>سجل العمليات</a>{% endif %}
       {% endif %}
       <a href="/help" class="{{ 'active' if request.path == '/help' }}"><span class="ic">📘</span>دليل الاستخدام</a>
