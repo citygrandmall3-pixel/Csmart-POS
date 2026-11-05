@@ -11956,6 +11956,35 @@ def pos_inventory_page():
     return render_template("pos_inventory.html")
 
 
+def _get_pos_inventory_warehouse(conn, company_id):
+    pref = conn.execute(
+        "SELECT pos_warehouse_id FROM company_preferences WHERE company_id=?",
+        (company_id,),
+    ).fetchone()
+    if pref and pref["pos_warehouse_id"]:
+        warehouse = conn.execute(
+            "SELECT id FROM warehouses WHERE id=? AND company_id=? AND is_active=1",
+            (pref["pos_warehouse_id"], company_id),
+        ).fetchone()
+        if warehouse:
+            return warehouse
+    warehouse = conn.execute(
+        "SELECT id FROM warehouses WHERE company_id=? AND is_active=1 AND (UPPER(code)='POS' OR name='مخزن الكاشير POS') ORDER BY id LIMIT 1",
+        (company_id,),
+    ).fetchone()
+    if not warehouse:
+        cur = conn.execute(
+            "INSERT INTO warehouses(company_id,code,name,description,is_active) VALUES(?, 'POS', 'مخزن الكاشير POS', 'مخزن مستقل مرتبط بالمخازن عبر التحويلات', 1)",
+            (company_id,),
+        )
+        warehouse = {"id": cur.lastrowid}
+    conn.execute(
+        "INSERT INTO company_preferences(company_id, pos_warehouse_id) VALUES(?, ?) ON CONFLICT(company_id) DO UPDATE SET pos_warehouse_id=excluded.pos_warehouse_id, updated_at=datetime('now','localtime')",
+        (company_id, warehouse["id"]),
+    )
+    return warehouse
+
+
 @app.route("/api/pos-inventory", methods=["GET"])
 def api_pos_inventory_list():
     try:
@@ -11963,12 +11992,9 @@ def api_pos_inventory_list():
         if not company_id:
             return jsonify(ok=False, error="لا توجد شركة حالية"), 400
 
-        warehouse = db.query_one(
-            "SELECT id FROM warehouses WHERE id=3 AND company_id=? AND is_active=1",
-            (company_id,),
-        )
-        if not warehouse:
-            return jsonify(ok=False, error="المخزن الرئيسي غير موجود أو غير نشط"), 400
+        with db.connect() as conn:
+            warehouse = _get_pos_inventory_warehouse(conn, company_id)
+            warehouse_id = warehouse["id"]
 
         prods = db.query(
             """
@@ -11987,7 +12013,7 @@ def api_pos_inventory_list():
             WHERE p.company_id=? AND p.is_active=1
             ORDER BY p.name
             """,
-            (warehouse["id"], company_id),
+            (warehouse_id, company_id),
         )
         result = [
             {"id": p["id"], "name": p["name"], "code": p["code"] or "-",
@@ -12005,101 +12031,82 @@ def api_pos_inventory_quick_add():
     company_id = _current_company_id()
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة حالية"), 400
-
     d = request.get_json(silent=True) or {}
     name = str(d.get("name") or "").strip()
     code = str(d.get("code") or "").strip()
     if not name:
         return jsonify(ok=False, error="اسم المنتج مطلوب"), 400
-
     try:
         import time
         unit_id = int(d.get("unit_id", 2))
         buy_price = float(d.get("buy_price", 0) or 0)
         sell_price = float(d.get("sell_price", 0) or 0)
         qty = float(d.get("qty", 0) or 0)
+        min_stock = float(d.get("min_stock", 0) or 0)
+        max_stock = float(d.get("max_stock", 0) or 0)
+        category_id = int(d["category_id"]) if d.get("category_id") not in (None, "") else None
     except (TypeError, ValueError):
-        return jsonify(ok=False, error="بيانات المنتج أو الأسعار أو الكمية غير صالحة"), 400
-
-    if buy_price < 0 or sell_price < 0 or qty < 0:
-        return jsonify(ok=False, error="لا يمكن إدخال أسعار أو كميات سالبة"), 400
+        return jsonify(ok=False, error="تحقق من الوحدة والتصنيف والأسعار والكميات والحدود"), 400
+    if min(buy_price, sell_price, qty, min_stock, max_stock) < 0:
+        return jsonify(ok=False, error="لا تقبل الأسعار أو الكميات أو الحدود قيماً سالبة"), 400
+    if max_stock > 0 and max_stock < min_stock:
+        return jsonify(ok=False, error="الحد الأقصى لا يمكن أن يقل عن الحد الأدنى"), 400
     if not code:
-        code = f"POS-{int(time.time())}"
-
+        code = f"POS-{company_id}-{int(time.time() * 1000)}"
+    def flag(key, default):
+        value = d.get(key)
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return 1 if value else 0
+        return 1 if str(value).strip().lower() in ("1", "true", "yes", "on") else 0
+    is_stock_item = flag("is_stock_item", 1)
+    allow_decimal_qty = flag("allow_decimal_qty", 1)
+    track_expiry = flag("track_expiry", 0)
+    track_lot = flag("track_lot", 0)
+    track_serial = flag("track_serial", 0)
     try:
         with db.connect() as conn:
-            warehouse = conn.execute(
-                "SELECT id FROM warehouses WHERE id=3 AND company_id=? AND is_active=1",
-                (company_id,),
-            ).fetchone()
-            if not warehouse:
-                return jsonify(ok=False, error="المخزن الرئيسي غير موجود أو غير نشط"), 400
-
-            unit = conn.execute(
-                "SELECT id FROM units WHERE id=? AND company_id=? AND is_active=1",
-                (unit_id, company_id),
-            ).fetchone()
+            warehouse = _get_pos_inventory_warehouse(conn, company_id)
+            unit = conn.execute("SELECT id FROM units WHERE id=? AND company_id=? AND is_active=1", (unit_id, company_id)).fetchone()
             if not unit:
-                return jsonify(ok=False, error="وحدة القياس غير موجودة"), 400
-
-            duplicate = conn.execute(
-                "SELECT id FROM products WHERE company_id=? AND code=?",
-                (company_id, code),
-            ).fetchone()
-            if duplicate:
+                return jsonify(ok=False, error="وحدة القياس غير موجودة أو غير نشطة"), 400
+            if category_id is not None:
+                category = conn.execute("SELECT id FROM product_categories WHERE id=? AND company_id=? AND is_active=1", (category_id, company_id)).fetchone()
+                if not category:
+                    return jsonify(ok=False, error="تصنيف المنتج غير موجود أو غير نشط"), 400
+            if conn.execute("SELECT id FROM products WHERE company_id=? AND code=?", (company_id, code)).fetchone():
                 return jsonify(ok=False, error="كود المنتج مستخدم بالفعل"), 409
-
             cur = conn.execute(
                 """INSERT INTO products
-                   (company_id, name, code, base_unit_id, is_stock_item)
-                   VALUES (?, ?, ?, ?, 1)""",
-                (company_id, name, code, unit_id),
+                   (company_id, category_id, name, code, base_unit_id, description, brand,
+                    model, specifications, is_stock_item, allow_decimal_qty, track_expiry,
+                    track_lot, track_serial, min_stock, max_stock)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (company_id, category_id, name, code, unit_id, str(d.get("description") or "").strip(),
+                 str(d.get("brand") or "").strip(), str(d.get("model") or "").strip(),
+                 str(d.get("specifications") or "").strip(), is_stock_item, allow_decimal_qty,
+                 track_expiry, track_lot, track_serial, min_stock, max_stock),
             )
             pid = cur.lastrowid
-
-            conn.execute(
-                """INSERT INTO product_barcodes
-                   (company_id, product_id, unit_id, barcode, is_primary)
-                   VALUES (?, ?, ?, ?, 1)""",
-                (company_id, pid, unit_id, code),
-            )
-
-            if sell_price > 0:
+            conn.execute("INSERT INTO product_barcodes(company_id, product_id, unit_id, barcode, is_primary) VALUES (?, ?, ?, ?, 1)", (company_id, pid, unit_id, code))
+            for price_type, price in (("sale", sell_price), ("purchase", buy_price)):
+                if price > 0:
+                    conn.execute(
+                        """INSERT INTO product_prices(company_id, product_id, unit_id, currency_id, price_type, price, is_default, is_active)
+                           VALUES (?, ?, ?, 3, ?, ?, 1, 1)""",
+                        (company_id, pid, unit_id, price_type, price),
+                    )
+            if qty > 0 and is_stock_item:
+                if not allow_decimal_qty and not qty.is_integer():
+                    return jsonify(ok=False, error="هذا الصنف لا يسمح بكميات عشرية"), 400
+                conn.execute("INSERT INTO warehouse_stock(company_id, warehouse_id, product_id, quantity) VALUES (?, ?, ?, ?)", (company_id, warehouse["id"], pid, qty))
                 conn.execute(
-                    """INSERT INTO product_prices
-                       (company_id, product_id, unit_id, currency_id,
-                        price_type, price, is_default, is_active)
-                       VALUES (?, ?, ?, 3, 'sale', ?, 1, 1)""",
-                    (company_id, pid, unit_id, sell_price),
-                )
-            if buy_price > 0:
-                conn.execute(
-                    """INSERT INTO product_prices
-                       (company_id, product_id, unit_id, currency_id,
-                        price_type, price, is_default, is_active)
-                       VALUES (?, ?, ?, 3, 'purchase', ?, 1, 1)""",
-                    (company_id, pid, unit_id, buy_price),
-                )
-
-            if qty > 0:
-                conn.execute(
-                    """INSERT INTO warehouse_stock
-                       (company_id, warehouse_id, product_id, quantity)
-                       VALUES (?, ?, ?, ?)""",
-                    (company_id, warehouse["id"], pid, qty),
-                )
-                conn.execute(
-                    """INSERT INTO stock_movements
-                       (company_id, warehouse_id, product_id, unit_id,
-                        movement_type, quantity, reference_type, reference_id,
-                        notes, created_by)
-                       VALUES (?, ?, ?, ?, 'in', ?, 'pos_quick_add', ?,
-                               'رصيد افتتاحي عند إضافة المنتج من شاشة نقطة البيع', ?)""",
+                    """INSERT INTO stock_movements(company_id, warehouse_id, product_id, unit_id, movement_type, quantity, reference_type, reference_id, notes, created_by)
+                       VALUES (?, ?, ?, ?, 'in', ?, 'pos_quick_add', ?, 'رصيد افتتاحي عند إضافة الصنف من POS', ?)""",
                     (company_id, warehouse["id"], pid, unit_id, qty, pid, g.user["id"]),
                 )
-
-        db.audit(g.user["full_name"], "إضافة منتج من نقطة البيع",
-                 f"{code} - {name} | كمية افتتاحية: {qty}")
+        db.audit(g.user["full_name"], "إضافة منتج من نقطة البيع", f"{code} - {name} | كمية افتتاحية: {qty}")
         return jsonify(ok=True, message=f"تمت الإضافة بنجاح. الكود: {code}", product_id=pid)
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 400
@@ -12124,10 +12131,7 @@ def api_pos_inventory_restock():
 
     try:
         with db.connect() as conn:
-            warehouse = conn.execute(
-                "SELECT id FROM warehouses WHERE id=3 AND company_id=? AND is_active=1",
-                (company_id,),
-            ).fetchone()
+            warehouse = _get_pos_inventory_warehouse(conn, company_id)
             if not warehouse:
                 return jsonify(ok=False, error="المخزن الرئيسي غير موجود أو غير نشط"), 400
 
