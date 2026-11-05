@@ -40,18 +40,30 @@
     <h1>📦 مخزن الكاشير (POS)</h1>
 
     <div class="card">
-        <h2>إضافة منتج سريع</h2>
-        <input type="text" id="code" placeholder="كود المنتج (اتركه فارغاً للتوليد التلقائي)">
-        <input type="text" id="name" placeholder="اسم المنتج">
-        <select id="unit" onchange="updateUnitLabel()">
-            <option value="2">قطعة</option>
-            <option value="3">كيلو</option>
-        </select>
-        <input type="number" id="buy" placeholder="سعر الشراء">
-        <input type="number" id="sell" placeholder="سعر البيع">
-        <input type="number" id="qty" placeholder="الكمية">
-        <span id="unitLabel" style="margin-right:10px;font-size:14px;color:#aaa;">قطعة</span>
-        <button onclick="addProduct()">حفظ</button>
+        <h2>إضافة صنف إلى مخزن الكاشير POS</h2>
+        <div class="pos-edit-grid">
+          <label class="pos-edit-field"><span>كود الصنف (تلقائي إذا ترك فارغاً)</span><input id="code" type="text" placeholder="توليد تلقائي"></label>
+          <label class="pos-edit-field"><span>اسم الصنف *</span><input id="name" type="text" required></label>
+          <label class="pos-edit-field"><span>التصنيف</span><select id="category"><option value="">بدون تصنيف</option></select></label>
+          <label class="pos-edit-field"><span>وحدة القياس *</span><select id="unit"></select></label>
+          <label class="pos-edit-field"><span>العلامة التجارية</span><input id="brand" type="text"></label>
+          <label class="pos-edit-field"><span>الموديل</span><input id="model" type="text"></label>
+          <label class="pos-edit-field"><span>سعر الشراء</span><input id="buy" type="number" min="0" step="0.01" value="0"></label>
+          <label class="pos-edit-field"><span>سعر البيع</span><input id="sell" type="number" min="0" step="0.01" value="0"></label>
+          <label class="pos-edit-field"><span>الكمية الافتتاحية في POS</span><input id="qty" type="number" min="0" step="0.001" value="0"></label>
+          <label class="pos-edit-field"><span>الحد الأدنى للمخزون</span><input id="min_stock" type="number" min="0" step="0.001" value="0"></label>
+          <label class="pos-edit-field"><span>الحد الأقصى للمخزون</span><input id="max_stock" type="number" min="0" step="0.001" value="0"></label>
+          <label class="pos-edit-field full"><span>الوصف</span><input id="description" type="text"></label>
+          <label class="pos-edit-field full"><span>المواصفات</span><input id="specifications" type="text"></label>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin:12px 0">
+          <label><input id="is_stock_item" type="checkbox" checked> صنف مخزني</label>
+          <label><input id="allow_decimal_qty" type="checkbox" checked> يسمح بالكسور</label>
+          <label><input id="track_expiry" type="checkbox"> تتبع الصلاحية</label>
+          <label><input id="track_lot" type="checkbox"> تتبع التشغيلة</label>
+          <label><input id="track_serial" type="checkbox"> تتبع السيريال</label>
+        </div>
+        <button type="button" onclick="addProduct()">حفظ الصنف</button>
     </div>
     <div class="card">
         <h2>المنتجات في المخزن</h2>
@@ -145,22 +157,38 @@
             }
         }
 
+        async function loadPosLookups() {
+            try {
+                const [unitsData, categoriesData] = await Promise.all([
+                    posRequestJson("/api/units"), posRequestJson("/api/product-categories")
+                ]);
+                const unitSelect = document.getElementById("unit");
+                unitSelect.innerHTML = (unitsData.items || []).filter(x => Number(x.is_active) === 1).map(x => '<option value="' + Number(x.id) + '">' + posEscapeHtml(x.name) + '</option>').join("");
+                const categorySelect = document.getElementById("category");
+                categorySelect.innerHTML = '<option value="">بدون تصنيف</option>' + (categoriesData.items || []).filter(x => Number(x.is_active) === 1).map(x => '<option value="' + Number(x.id) + '">' + posEscapeHtml(x.name) + '</option>').join("");
+            } catch (error) { posNotify(error.message || "تعذر تحميل الوحدات والتصنيفات", "error"); }
+        }
+
         async function addProduct() {
+            const val = id => document.getElementById(id).value;
+            const checked = id => document.getElementById(id).checked;
             const data = {
-                code: document.getElementById("code").value,
-                name: document.getElementById("name").value,
-                unit_id: document.getElementById("unit").value,
-                buy_price: document.getElementById("buy").value,
-                sell_price: document.getElementById("sell").value,
-                qty: document.getElementById("qty").value
+                code: val("code"), name: val("name"), category_id: val("category"),
+                unit_id: val("unit"), brand: val("brand"), model: val("model"),
+                description: val("description"), specifications: val("specifications"),
+                buy_price: val("buy"), sell_price: val("sell"), qty: val("qty"),
+                min_stock: val("min_stock"), max_stock: val("max_stock"),
+                is_stock_item: checked("is_stock_item"), allow_decimal_qty: checked("allow_decimal_qty"),
+                track_expiry: checked("track_expiry"), track_lot: checked("track_lot"), track_serial: checked("track_serial")
             };
+            if (!data.name.trim() || !data.unit_id) { posNotify("اسم الصنف ووحدة القياس مطلوبان", "error"); return; }
             try {
                 const json = await posRequestJson("/api/pos-inventory/quick-add", {
                     method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data)
                 });
                 posNotify(json.message || "تمت إضافة الصنف", "success");
-                ["code","name","buy","sell","qty"].forEach(id => document.getElementById(id).value = "");
-                loadProducts();
+                ["code","name","brand","model","description","specifications","buy","sell","qty","min_stock","max_stock"].forEach(id => document.getElementById(id).value = "");
+                loadPosLookups();\n        loadProducts();
             } catch (error) { posNotify(error.message || "تعذرت إضافة الصنف", "error"); }
         }
 
