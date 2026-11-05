@@ -191,10 +191,19 @@ async function wipeAll() {
   } catch (e) { toast(e.message, 'err'); }
 }
 
-(function () {
+(async function () {
   const q = new URLSearchParams(location.search).get('q');
-  if (q) { $('#search').value = q; render(ACCOUNTS.filter(a => a.acc_no.includes(q) || a.name.includes(q))); }
-  else load();
+  if (q) $('#search').value = q;
+  await load();
+  if (q) {
+    const normalized = q.trim().toLowerCase();
+    const match = ACCOUNTS.find(a => String(a.acc_no || '').trim().toLowerCase() === normalized);
+    if (match) editAcc(match);
+    else render(ACCOUNTS.filter(a =>
+      String(a.acc_no || '').toLowerCase().includes(normalized) ||
+      String(a.name || '').toLowerCase().includes(normalized)
+    ));
+  }
 })();
 </script>
 {% endblock %}
