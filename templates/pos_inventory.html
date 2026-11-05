@@ -188,7 +188,7 @@
                 });
                 posNotify(json.message || "تمت إضافة الصنف", "success");
                 ["code","name","brand","model","description","specifications","buy","sell","qty","min_stock","max_stock"].forEach(id => document.getElementById(id).value = "");
-                loadPosLookups();\n        loadProducts();
+                loadProducts();
             } catch (error) { posNotify(error.message || "تعذرت إضافة الصنف", "error"); }
         }
 
@@ -582,6 +582,8 @@ async function submitPosPurchaseReturn() {
         posReturnInFlight.delete(pid);
     }
 }
+loadPosLookups();
+loadProducts();
 </script>
 </body>
 </html>
