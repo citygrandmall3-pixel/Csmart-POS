@@ -12351,13 +12351,6 @@ def _get_pos_inventory_warehouse(company_id):
     )
     if len(active) == 1:
         return active[0]
-    main_matches = [
-        w for w in active
-        if "رئيسي" in str(w["name"] or "").lower()
-        or "main" in str(w["name"] or "").lower()
-    ]
-    if len(main_matches) == 1:
-        return main_matches[0]
     if not active:
         raise ValueError("لا يوجد مخزن نشط للشركة")
     raise ValueError("حدد المخزن الافتراضي من إعدادات الشركة أولًا")
