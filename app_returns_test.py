@@ -29,7 +29,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import database as db
 import excel_tools as xl
 
-ROLES = {"admin": "مدير النظام", "accountant": "محاسب", "cashier": "كاشير", "viewer": "مشاهدة فقط"}
+ROLES = {"admin": "مدير النظام", "accountant": "محاسب", "cashier": "كاشير", "viewer": "مشاهدة فقط", "dev": "مطور النظام"}
 ENTRY_TYPES = ["عادي", "تسوية", "افتتاحي", "إقفال"]
 
 # في النسخة المجمّعة (EXE) القوالب والملفات الثابتة تُفك داخل مجلد مؤقت _MEIPASS
@@ -141,6 +141,16 @@ def admin_required(f):
     def wrapper(*args, **kwargs):
         if g.user["role"] != "admin":
             return jsonify(error="هذه الصفحة لمدير النظام فقط"), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def dev_or_admin_required(f):
+    """يسمح للمدير ومطور النظام بإدارة المستخدمين دون منحه صلاحيات مالية."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if g.user["role"] not in ("admin", "dev"):
+            return jsonify(error="هذه الصفحة للمدير أو مطور النظام فقط"), 403
         return f(*args, **kwargs)
     return wrapper
 
@@ -259,7 +269,7 @@ def budget_page():
 
 
 @app.route("/users")
-@admin_required
+@dev_or_admin_required
 def users_page():
     users = db.query("SELECT id, username, full_name, role, created_at FROM users ORDER BY id")
     return render_template("users.html", users=users)
@@ -8954,7 +8964,7 @@ def api_dashboard():
 # ------------------------------------------------------------------
 
 @app.route("/api/users", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_users_create():
     d = request.json or {}
     username = _sanitize((d.get("username") or "").strip().lower())
@@ -8976,7 +8986,7 @@ def api_users_create():
 
 
 @app.route("/api/users/<int:uid>/password", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_users_password(uid):
     d = request.json or {}
     password = d.get("password") or ""
@@ -8994,7 +9004,7 @@ def api_users_password(uid):
 
 
 @app.route("/api/users/<int:uid>/role", methods=["PUT", "POST"])
-@admin_required
+@dev_or_admin_required
 def api_users_role(uid):
     d = request.json or {}
     role = d.get("role")
@@ -9010,7 +9020,7 @@ def api_users_role(uid):
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
 
-    # منع المدير من تخفيض صلاحية حسابه الحالي
+    if g.user["role"] == "dev" and u["role"] == "admin":\n        return jsonify(error="لا يستطيع مطور النظام تعديل حساب المدير"), 403\n\n    # منع المدير من تخفيض صلاحية حسابه الحالي
     if uid == g.user["id"] and role != "admin":
         return jsonify(error="لا يمكنك تخفيض صلاحية حسابك الحالي"), 400
 
@@ -9051,7 +9061,7 @@ def api_users_role(uid):
 
 
 @app.route("/api/users/<int:uid>", methods=["DELETE"])
-@admin_required
+@dev_or_admin_required
 def api_users_delete(uid):
     if uid == g.user["id"]:
         return jsonify(error="لا يمكنك حذف نفسك"), 400
@@ -12395,7 +12405,7 @@ def api_reports_download():
 
 
 @app.route("/api/users", methods=["GET"])
-@admin_required
+@dev_or_admin_required
 def api_users_list():
     try:
         users = db.query("SELECT id, full_name, username, role FROM users")
