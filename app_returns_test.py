@@ -8970,6 +8970,8 @@ def api_users_create():
     username = _sanitize((d.get("username") or "").strip().lower())
     full_name = _sanitize((d.get("full_name") or "").strip())
     role = d.get("role") if d.get("role") in ROLES else "accountant"
+    if g.user["role"] == "dev" and role == "admin":
+        return jsonify(error="مطور النظام لا يستطيع إنشاء مدير نظام"), 403
     password = d.get("password") or ""
     if not username or not full_name or len(password) < 8:
         return jsonify(error="بيانات غير مكتملة (كلمة المرور 8 أحرف على الأقل)"), 400
@@ -8990,6 +8992,11 @@ def api_users_create():
 def api_users_password(uid):
     d = request.json or {}
     password = d.get("password") or ""
+    u = db.query_one("SELECT * FROM users WHERE id=?", (uid,))
+    if not u:
+        return jsonify(error="المستخدم غير موجود"), 404
+    if g.user["role"] == "dev" and u["role"] == "admin":
+        return jsonify(error="مطور النظام لا يستطيع تغيير كلمة مرور المدير"), 403
     if len(password) < 8:
         return jsonify(error="كلمة المرور 8 أحرف على الأقل"), 400
     if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password):
@@ -9011,6 +9018,8 @@ def api_users_role(uid):
 
     if role not in ROLES:
         return jsonify(error="الصلاحية غير صحيحة"), 400
+    if g.user["role"] == "dev" and role == "admin":
+        return jsonify(error="مطور النظام لا يستطيع منح صلاحية المدير"), 403
 
     u = db.query_one(
         "SELECT * FROM users WHERE id=?",
@@ -9020,8 +9029,11 @@ def api_users_role(uid):
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
 
-    if g.user["role"] == "dev" and u["role"] == "admin":\n        return jsonify(error="لا يستطيع مطور النظام تعديل حساب المدير"), 403\n\n    # منع المدير من تخفيض صلاحية حسابه الحالي
-    if g.user["role"] == "dev" and u["role"] == "admin":\n        return jsonify(error="لا يستطيع مطور النظام تعديل حساب المدير"), 403\n\n    if uid == g.user["id"] and role != "admin":
+    if g.user["role"] == "dev" and u["role"] == "admin":
+        return jsonify(error="لا يستطيع مطور النظام تعديل حساب المدير"), 403
+
+    # منع المدير من تخفيض صلاحية حسابه الحالي
+    if uid == g.user["id"] and role != "admin":
         return jsonify(error="لا يمكنك تخفيض صلاحية حسابك الحالي"), 400
 
     # منع إزالة صلاحية آخر مدير
@@ -9069,6 +9081,8 @@ def api_users_delete(uid):
     u = db.query_one("SELECT * FROM users WHERE id=?", (uid,))
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
+    if g.user["role"] == "dev" and u["role"] == "admin":
+        return jsonify(error="لا يستطيع مطور النظام حذف حساب المدير"), 403
     if u["role"] == "admin" and len(admins) <= 1:
         return jsonify(error="لا يمكن حذف آخر مدير نظام"), 400
     db.execute("DELETE FROM users WHERE id=?", (uid,))
