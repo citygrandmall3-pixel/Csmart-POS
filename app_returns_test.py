@@ -7530,6 +7530,85 @@ def api_sale_items(sale_id):
     }), 200
 
 
+@app.route("/api/stock-transfers", methods=["POST"])
+@require_write
+def api_stock_transfer_create():
+    company_id = _current_company_id()
+    if not company_id:
+        return jsonify(ok=False, error="لا توجد شركة حالية"), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        source_id = int(data.get("source_warehouse_id"))
+        destination_id = int(data.get("destination_warehouse_id"))
+        product_id = int(data.get("product_id"))
+        quantity = float(data.get("quantity"))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error="حدد المخزنين والصنف والكمية بشكل صحيح"), 400
+    if source_id == destination_id or quantity <= 0:
+        return jsonify(ok=False, error="اختر مخزنين مختلفين وأدخل كمية أكبر من صفر"), 400
+    notes = str(data.get("notes") or "").strip()[:500]
+    try:
+        import time
+        with db.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            warehouses = conn.execute(
+                "SELECT id FROM warehouses WHERE company_id=? AND is_active=1 AND id IN (?, ?)",
+                (company_id, source_id, destination_id),
+            ).fetchall()
+            if len(warehouses) != 2:
+                return jsonify(ok=False, error="أحد المخزنين غير موجود أو غير نشط"), 400
+            product = conn.execute(
+                "SELECT id, name, base_unit_id, is_active, is_stock_item, allow_decimal_qty FROM products WHERE id=? AND company_id=?",
+                (product_id, company_id),
+            ).fetchone()
+            if not product or not product["is_active"] or not product["is_stock_item"]:
+                return jsonify(ok=False, error="الصنف غير موجود أو غير نشط أو غير مخزني"), 400
+            if not product["allow_decimal_qty"] and not quantity.is_integer():
+                return jsonify(ok=False, error="هذا الصنف لا يسمح بكميات عشرية"), 400
+            stock = conn.execute(
+                "SELECT id, quantity FROM warehouse_stock WHERE company_id=? AND warehouse_id=? AND product_id=?",
+                (company_id, source_id, product_id),
+            ).fetchone()
+            available = float(stock["quantity"]) if stock else 0.0
+            if quantity > available:
+                return jsonify(ok=False, error=f"الرصيد المتاح في المخزن المصدر {available} فقط"), 400
+            unit_id = product["base_unit_id"]
+            cur = conn.execute(
+                """INSERT INTO stock_transfers
+                   (company_id, transfer_no, source_warehouse_id, destination_warehouse_id,
+                    product_id, unit_id, quantity, notes, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (company_id, f"TR-{int(time.time() * 1000)}", source_id, destination_id,
+                 product_id, unit_id, quantity, notes, g.user["id"]),
+            )
+            transfer_id = cur.lastrowid
+            conn.execute(
+                "UPDATE warehouse_stock SET quantity=quantity-?, updated_at=datetime('now','localtime') WHERE id=?",
+                (quantity, stock["id"]),
+            )
+            conn.execute(
+                """INSERT INTO warehouse_stock(company_id, warehouse_id, product_id, quantity)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(company_id, warehouse_id, product_id)
+                   DO UPDATE SET quantity=quantity+excluded.quantity, updated_at=datetime('now','localtime')""",
+                (company_id, destination_id, product_id, quantity),
+            )
+            for wid, kind, description in ((source_id, "out", "صرف من المصدر"), (destination_id, "in", "إضافة للوجهة")):
+                conn.execute(
+                    """INSERT INTO stock_movements
+                       (company_id, warehouse_id, product_id, unit_id, movement_type,
+                        quantity, reference_type, reference_id, notes, created_by)
+                       VALUES (?, ?, ?, ?, ?, ?, 'warehouse_transfer', ?, ?, ?)""",
+                    (company_id, wid, product_id, unit_id, kind, quantity, transfer_id,
+                     f"تحويل مخزني {transfer_id}: {description}. {notes}".strip(), g.user["id"]),
+                )
+        db.audit(g.user["full_name"], "تحويل بين المخازن",
+                 f"تحويل رقم {transfer_id}: {product['name']} كمية {quantity} من {source_id} إلى {destination_id}")
+        return jsonify(ok=True, transfer_id=transfer_id, message=f"تم التحويل بنجاح. رقم الحركة: {transfer_id}")
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
 @app.route("/stock")
 def stock_page():
     return render_template("stock.html")
