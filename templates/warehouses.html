@@ -505,16 +505,6 @@ async function saveWarehouse(event) {
     };
 
 
-    if (!payload.code) {
-
-        showWarehouseMessage(
-            "كود المخزن مطلوب",
-            "error"
-        );
-
-        return;
-    }
-
 
     if (!payload.name) {
 
