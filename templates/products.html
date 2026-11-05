@@ -1,0 +1,1655 @@
+{% extends "base.html" %}
+
+{% block title %}المنتجات{% endblock %}
+
+{% block content %}
+
+<style>
+    .products-page {
+        direction: rtl;
+    }
+
+    .products-toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .products-toolbar input,
+    .products-toolbar select {
+        min-width: 180px;
+    }
+
+    .product-form-card {
+        display: none;
+        margin-bottom: 20px;
+    }
+
+    .product-form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .product-form-grid .full {
+        grid-column: 1 / -1;
+    }
+
+    .product-checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin-top: 8px;
+    }
+
+    .product-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .product-check input {
+        width: auto;
+    }
+
+    .products-table-wrap {
+        overflow-x: auto;
+    }
+
+    .products-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .products-table th,
+    .products-table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #ddd;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .products-table th {
+        font-weight: 700;
+    }
+
+    .status-active {
+        font-weight: 700;
+    }
+
+    .status-inactive {
+        opacity: 0.65;
+    }
+
+    .product-actions {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+
+    .product-actions button {
+        white-space: nowrap;
+    }
+
+    .form-section-title {
+        margin: 18px 0 8px;
+        font-weight: 700;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 6px;
+    }
+
+    .product-pricing-card {
+        margin-top: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 14px;
+    }
+
+    .product-pricing-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .product-pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        align-items: end;
+    }
+
+    .product-pricing-grid .pricing-action {
+        display: flex;
+        align-items: end;
+    }
+
+    .product-pricing-table-wrap {
+        overflow-x: auto;
+        margin-top: 15px;
+    }
+
+    .product-pricing-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .product-pricing-table th,
+    .product-pricing-table td {
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .price-type-sale {
+        font-weight: 700;
+    }
+
+    .price-type-purchase {
+        font-weight: 700;
+    }
+
+    .pricing-inactive {
+        opacity: 0.55;
+    }
+
+    .pricing-status {
+        font-weight: 700;
+    }
+
+    @media (max-width: 1000px) {
+        .product-pricing-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+
+    @media (max-width: 900px) {
+        .product-form-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .product-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .product-form-grid .full {
+            grid-column: auto;
+        }
+    }
+</style>
+
+<div class="products-page">
+
+    <div class="page-header">
+        <div>
+            <h1>📦 المنتجات</h1>
+            <p>إدارة المنتجات والأصناف وربطها بالتصنيفات ووحدات القياس.</p>
+        </div>
+
+        <button type="button" class="btn btn-primary" onclick="openProductForm()">
+            ➕ إضافة منتج
+        </button>
+    </div>
+
+    <div id="productFormCard" class="card product-form-card">
+
+        <div class="card-header">
+            <h2 id="productFormTitle">إضافة منتج</h2>
+        </div>
+
+        <div class="card-body">
+
+            <div class="form-section-title">البيانات الأساسية</div>
+
+            <div class="product-form-grid">
+
+                <input id="productCode" type="hidden">
+
+                <div>
+                    <label for="productName">اسم المنتج *</label>
+                    <input id="productName" type="text" placeholder="اسم المنتج">
+                </div>
+
+                <div>
+                    <label for="productCategory">التصنيف</label>
+                    <select id="productCategory">
+                        <option value="">بدون تصنيف</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="productUnit">وحدة القياس الأساسية *</label>
+                    <select id="productUnit">
+                        <option value="">اختر الوحدة</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="productBrand">العلامة التجارية</label>
+                    <input id="productBrand" type="text" placeholder="مثال: Hikvision">
+                </div>
+
+                <div>
+                    <label for="productModel">الموديل</label>
+                    <input id="productModel" type="text" placeholder="رقم الموديل">
+                </div>
+
+                <div class="full">
+                    <label for="productDescription">الوصف</label>
+                    <textarea id="productDescription" rows="3"
+                              placeholder="وصف المنتج"></textarea>
+                </div>
+
+                <div class="full">
+                    <label for="productSpecifications">المواصفات</label>
+                    <textarea id="productSpecifications" rows="4"
+                              placeholder="المواصفات الفنية للمنتج"></textarea>
+                </div>
+
+            </div>
+
+            <div class="form-section-title">المخزون والتتبع</div>
+
+            <div class="product-form-grid">
+
+                <div>
+                    <label for="productMinStock">الحد الأدنى للمخزون</label>
+                    <input id="productMinStock" type="number" min="0" step="any" value="0">
+                </div>
+
+                <div>
+                    <label for="productMaxStock">الحد الأقصى للمخزون</label>
+                    <input id="productMaxStock" type="number" min="0" step="any" value="0">
+                </div>
+
+                <div class="full">
+                    <div class="product-checks">
+
+                        <label class="product-check">
+                            <input id="productIsStock" type="checkbox" checked>
+                            <span>صنف مخزني</span>
+                        </label>
+
+                        <label class="product-check">
+                            <input id="productDecimalQty" type="checkbox" checked>
+                            <span>السماح بالكميات العشرية</span>
+                        </label>
+
+                        <label class="product-check">
+                            <input id="productExpiry" type="checkbox">
+                            <span>تتبع تاريخ الصلاحية</span>
+                        </label>
+
+                        <label class="product-check">
+                            <input id="productLot" type="checkbox">
+                            <span>تتبع رقم التشغيلة Lot</span>
+                        </label>
+
+                        <label class="product-check">
+                            <input id="productSerial" type="checkbox">
+                            <span>تتبع الرقم التسلسلي Serial</span>
+                        </label>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <div style="display:none;"><div id="productPricingSection"
+                 class="product-pricing-card"
+                 style="display:none;">
+
+                <div class="product-pricing-header">
+                    <div>
+                        <h3 style="margin:0;">💰 أسعار المنتج</h3>
+                        <div style="font-size:13px; opacity:0.75; margin-top:4px;">
+                            أسعار البيع والشراء حسب الوحدة والعملة.
+                        </div></div>
+                    </div>
+
+                    <div id="productPricingCurrentProduct"
+                         style="font-weight:700;">
+                    </div>
+                </div>
+
+                <div class="product-pricing-grid">
+
+                    <div>
+                        <label for="pricingType">نوع السعر</label>
+                        <select id="pricingType">
+                            <option value="sale">سعر بيع</option>
+                            <option value="purchase">سعر شراء</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="pricingUnit">الوحدة</label>
+                        <select id="pricingUnit"></select>
+                    </div>
+
+                    <div style="display:none;"><div>
+                        <label for="pricingCurrency">العملة</label>
+                        <select id="pricingCurrency"></select>
+                    </div></div>
+
+                    <div>
+                        <label for="pricingPrice">السعر</label>
+                        <input
+                            id="pricingPrice"
+                            type="number"
+                            min="0"
+                            step="any"
+                            value="0">
+                    </div>
+
+                    <div class="pricing-action">
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            onclick="saveProductPrice()">
+                            💾 حفظ السعر
+                        </button>
+                    </div>
+
+                </div>
+
+                <div style="
+                    display:flex;
+                    gap:18px;
+                    flex-wrap:wrap;
+                    margin-top:12px;
+                ">
+
+                    <label class="product-check">
+                        <input id="pricingIsDefault"
+                               type="checkbox"
+                               checked>
+                        <span>السعر الافتراضي</span>
+                    </label>
+
+                    <label class="product-check">
+                        <input id="pricingIsActive"
+                               type="checkbox"
+                               checked>
+                        <span>فعال</span>
+                    </label>
+
+                </div>
+
+                <div id="productPricingMessage"
+                     style="margin-top:10px;">
+                </div>
+
+                <div style="display:none;"><div class="product-pricing-table-wrap">
+
+                    <table class="product-pricing-table">
+
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>نوع السعر</th>
+                                <th>الوحدة</th>
+                                <th>العملة</th>
+                                <th>السعر</th>
+                                <th>افتراضي</th>
+                                <th>الحالة</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="productPricingTableBody">
+                            <tr>
+                                <td colspan="8"
+                                    style="text-align:center;">
+                                    لا توجد أسعار
+                                </td>
+                            </tr>
+                        </tbody>
+
+                    </table>
+
+                </div></div>
+
+            </div>
+
+
+            <div style="margin-top:18px; display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary" onclick="saveProduct()">
+                    💾 حفظ
+                </button>
+
+                <button type="button" class="btn" onclick="closeProductForm()">
+                    إلغاء
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="card">
+
+        <div class="card-header">
+            <h2>قائمة المنتجات</h2>
+        </div>
+
+        <div class="card-body">
+
+            <div class="products-toolbar">
+
+                <input
+                    id="productSearch"
+                    type="text"
+                    placeholder="🔎 بحث بالكود أو اسم المنتج أو الموديل..."
+                    oninput="renderProducts()"
+                >
+
+                <select id="productStatusFilter" onchange="renderProducts()">
+                    <option value="">كل الحالات</option>
+                    <option value="1">نشط</option>
+                    <option value="0">غير نشط</option>
+                </select>
+
+                <select id="productCategoryFilter" onchange="renderProducts()">
+                    <option value="">كل التصنيفات</option>
+                </select>
+
+                <button type="button" class="btn" onclick="loadProducts()">
+                    🔄 تحديث
+                </button>
+
+            </div>
+
+            <div id="productsMessage"></div>
+
+            <div class="products-table-wrap">
+
+                <table class="products-table">
+
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الكود</th>
+                            <th>اسم المنتج</th>
+                            <th>التصنيف</th>
+                            <th>الوحدة</th>
+                            <th>العلامة</th>
+                            <th>الموديل</th>
+                            <th>المخزون</th>
+                            <th>الحالة</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="productsTableBody">
+                        <tr>
+                            <td colspan="10">جاري التحميل...</td>
+                        </tr>
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+let products = [];
+let categories = [];
+let units = [];
+let editingProductId = null;
+let currencies = [];
+let productPrices = [];
+let editingPriceId = null;
+
+function showProductMessage(message, type = "success") {
+    const box = document.getElementById("productsMessage");
+
+    box.innerHTML = `
+        <div style="
+            padding:10px;
+            margin-bottom:12px;
+            border-radius:6px;
+            border:1px solid #ddd;
+        ">
+            ${escapeHtml(message)}
+        </div>
+    `;
+
+    setTimeout(() => {
+        box.innerHTML = "";
+    }, 3500);
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+async function loadCategories() {
+    const response = await fetch("/api/product-categories");
+
+    if (!response.ok) {
+        throw new Error("تعذر تحميل التصنيفات");
+    }
+
+    const data = await response.json();
+    categories = data.items || [];
+
+    const select = document.getElementById("productCategory");
+    const filter = document.getElementById("productCategoryFilter");
+
+    select.innerHTML = `<option value="">بدون تصنيف</option>`;
+    filter.innerHTML = `<option value="">كل التصنيفات</option>`;
+
+    categories.forEach(category => {
+
+        const label =
+            `${category.code} - ${category.name}`;
+
+        select.innerHTML += `
+            <option value="${category.id}">
+                ${escapeHtml(label)}
+            </option>
+        `;
+
+        filter.innerHTML += `
+            <option value="${category.id}">
+                ${escapeHtml(label)}
+            </option>
+        `;
+    });
+}
+
+async function loadUnits() {
+    const response = await fetch("/api/units");
+
+    if (!response.ok) {
+        throw new Error("تعذر تحميل وحدات القياس");
+    }
+
+    const data = await response.json();
+    units = data.items || [];
+
+    const select = document.getElementById("productUnit");
+
+    select.innerHTML = `<option value="">اختر الوحدة</option>`;
+
+    units.forEach(unit => {
+
+        const label =
+            `${unit.code} - ${unit.name}` +
+            (unit.symbol ? ` (${unit.symbol})` : "");
+
+        select.innerHTML += `
+            <option value="${unit.id}">
+                ${escapeHtml(label)}
+            </option>
+        `;
+    });
+}
+
+async function loadCurrencies() {
+
+    const response = await fetch("/api/currencies");
+
+    if (!response.ok) {
+        throw new Error("تعذر تحميل العملات");
+    }
+
+    const data = await response.json();
+
+    currencies = data.rows || [];
+
+    const select =
+        document.getElementById("pricingCurrency");
+
+    select.innerHTML = "";
+
+    currencies.forEach(currency => {
+
+        const symbol =
+            currency.symbol
+            ? ` (${currency.symbol})`
+            : "";
+
+        select.innerHTML += `
+            <option value="${currency.id}">
+                ${escapeHtml(currency.code)} -
+                ${escapeHtml(currency.name)}
+                ${escapeHtml(symbol)}
+            </option>
+        `;
+    });
+
+    const usd =
+        currencies.find(c => c.code === "USD");
+
+    if (usd) {
+        select.value = String(usd.id);
+    }
+}
+
+
+function fillPricingUnits(product) {
+
+    const select =
+        document.getElementById("pricingUnit");
+
+    select.innerHTML = "";
+
+    units.forEach(unit => {
+
+        const label =
+            `${unit.code} - ${unit.name}` +
+            (unit.symbol ? ` (${unit.symbol})` : "");
+
+        select.innerHTML += `
+            <option value="${unit.id}">
+                ${escapeHtml(label)}
+            </option>
+        `;
+    });
+
+    if (product && product.base_unit_id) {
+        select.value = String(product.base_unit_id);
+    }
+}
+
+
+function showPricingMessage(message, type = "success") {
+
+    const box =
+        document.getElementById("productPricingMessage");
+
+    box.innerHTML = `
+        <div style="
+            padding:8px;
+            border:1px solid #ddd;
+            border-radius:6px;
+            margin-top:6px;
+        ">
+            ${escapeHtml(message)}
+        </div>
+    `;
+
+    setTimeout(() => {
+        box.innerHTML = "";
+    }, 3000);
+}
+
+
+async function loadProductPrices(productId) {
+
+    if (!productId) {
+        productPrices = [];
+        renderProductPrices();
+        return;
+    }
+
+    const response = await fetch(
+        `/api/product-prices?product_id=${encodeURIComponent(productId)}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.error || "تعذر تحميل أسعار المنتج"
+        );
+    }
+
+    productPrices = data.rows || [];
+
+    renderProductPrices();
+}
+
+
+function renderProductPrices() {
+
+    const tbody =
+        document.getElementById("productPricingTableBody");
+
+    if (!tbody) {
+        return;
+    }
+
+    if (!productPrices.length) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8"
+                    style="text-align:center;">
+                    لا توجد أسعار مسجلة لهذا المنتج
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+    tbody.innerHTML = productPrices.map((price, index) => {
+
+        const typeText =
+            price.price_type === "sale"
+            ? "بيع"
+            : "شراء";
+
+        const typeClass =
+            price.price_type === "sale"
+            ? "price-type-sale"
+            : "price-type-purchase";
+
+        const activeText =
+            price.is_active
+            ? "فعال"
+            : "غير فعال";
+
+        return `
+            <tr class="${price.is_active ? "" : "pricing-inactive"}">
+
+                <td>${index + 1}</td>
+
+                <td>
+                    <span class="${typeClass}">
+                        ${typeText}
+                    </span>
+                </td>
+
+                <td>
+                    ${escapeHtml(price.unit_name || "-")}
+                    ${price.unit_symbol
+                        ? ` (${escapeHtml(price.unit_symbol)})`
+                        : ""}
+                </td>
+
+                <td>
+                    ${escapeHtml(price.currency_code || "-")}
+                    ${price.currency_symbol
+                        ? ` (${escapeHtml(price.currency_symbol)})`
+                        : ""}
+                </td>
+
+                <td>
+                    <strong>
+                        ${Number(price.price || 0)}
+                    </strong>
+                </td>
+
+                <td>
+                    ${
+                        price.is_default
+                        ? "⭐ نعم"
+                        : "لا"
+                    }
+                </td>
+
+                <td>
+                    <span class="pricing-status">
+                        ${activeText}
+                    </span>
+                </td>
+
+                <td>
+
+                    <div class="product-actions">
+
+                        <button
+                            type="button"
+                            class="btn"
+                            onclick="editProductPrice(${price.id})">
+                            ✏️ تعديل
+                        </button>
+
+                        ${
+                            price.is_active
+                            ?
+                            `<button
+                                type="button"
+                                class="btn"
+                                onclick="disableProductPrice(${price.id})">
+                                ⛔ تعطيل
+                            </button>`
+                            :
+                            `<button
+                                type="button"
+                                class="btn"
+                                onclick="activateProductPrice(${price.id})">
+                                ✅ تفعيل
+                            </button>`
+                        }
+
+                    </div>
+
+                </td>
+
+            </tr>
+        `;
+
+    }).join("");
+}
+
+
+function resetProductPriceForm() {
+
+    editingPriceId = null;
+
+    document.getElementById("pricingType").value = "sale";
+
+    const product =
+        products.find(p => p.id === editingProductId);
+
+    if (product) {
+        fillPricingUnits(product);
+    }
+
+    const currencySelect =
+        document.getElementById("pricingCurrency");
+
+    if (currencySelect.options.length) {
+
+        const usd =
+            currencies.find(c => c.code === "USD");
+
+        currencySelect.value =
+            usd
+            ? String(usd.id)
+            : currencySelect.options[0].value;
+    }
+
+    document.getElementById("pricingPrice").value = "0";
+    document.getElementById("pricingIsDefault").checked = true;
+    document.getElementById("pricingIsActive").checked = true;
+}
+
+
+function editProductPrice(priceId) {
+
+    const price =
+        productPrices.find(p => p.id === priceId);
+
+    if (!price) {
+        alert("سجل السعر غير موجود");
+        return;
+    }
+
+    editingPriceId = price.id;
+
+    document.getElementById("pricingType").value =
+        price.price_type;
+
+    document.getElementById("pricingUnit").value =
+        String(price.unit_id);
+
+    document.getElementById("pricingCurrency").value =
+        String(price.currency_id);
+
+    document.getElementById("pricingPrice").value =
+        price.price ?? 0;
+
+    document.getElementById("pricingIsDefault").checked =
+        !!price.is_default;
+
+    document.getElementById("pricingIsActive").checked =
+        !!price.is_active;
+
+    document.getElementById("pricingPrice").focus();
+}
+
+
+async function saveProductPrice() {
+
+    if (!editingProductId) {
+        alert("يجب حفظ المنتج أولًا قبل إضافة الأسعار");
+        return;
+    }
+
+    const unitId =
+        Number(document.getElementById("pricingUnit").value);
+
+    const currencyId =
+        Number(document.getElementById("pricingCurrency").value);
+
+    const priceType =
+        document.getElementById("pricingType").value;
+
+    const price =
+        Number(document.getElementById("pricingPrice").value || 0);
+
+    const isDefault =
+        document.getElementById("pricingIsDefault").checked;
+
+    const isActive =
+        document.getElementById("pricingIsActive").checked;
+
+    if (!unitId) {
+        alert("اختر الوحدة");
+        return;
+    }
+
+    if (!currencyId) {
+        alert("اختر العملة");
+        return;
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+        alert("السعر غير صالح");
+        return;
+    }
+
+    const payload = {
+        product_id: Number(editingProductId),
+        unit_id: unitId,
+        currency_id: currencyId,
+        price_type: priceType,
+        price: price,
+        is_default: isDefault,
+        is_active: isActive
+    };
+
+    const url =
+        editingPriceId
+        ? `/api/product-prices/${editingPriceId}`
+        : "/api/product-prices";
+
+    const method =
+        editingPriceId
+        ? "PUT"
+        : "POST";
+
+    const response = await fetch(url, {
+        method,
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(
+            data.error ||
+            "تعذر حفظ سعر المنتج"
+        );
+        return;
+    }
+
+    showPricingMessage(
+        editingPriceId
+        ? "تم تعديل السعر بنجاح"
+        : "تمت إضافة السعر بنجاح"
+    );
+
+    resetProductPriceForm();
+
+    await loadProductPrices(editingProductId);
+}
+
+
+async function disableProductPrice(priceId) {
+
+    const price =
+        productPrices.find(p => p.id === priceId);
+
+    if (!price) {
+        alert("سجل السعر غير موجود");
+        return;
+    }
+
+    if (
+        !confirm(
+            `هل تريد تعطيل سعر ${price.price_type === "sale" ? "البيع" : "الشراء"}؟`
+        )
+    ) {
+        return;
+    }
+
+    const response = await fetch(
+        `/api/product-prices/${priceId}`,
+        {
+            method: "DELETE"
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(
+            data.error ||
+            "تعذر تعطيل السعر"
+        );
+        return;
+    }
+
+    showPricingMessage("تم تعطيل السعر");
+
+    await loadProductPrices(editingProductId);
+}
+
+
+async function activateProductPrice(priceId) {
+
+    const price =
+        productPrices.find(p => p.id === priceId);
+
+    if (!price) {
+        alert("سجل السعر غير موجود");
+        return;
+    }
+
+    const payload = {
+        product_id: price.product_id,
+        unit_id: price.unit_id,
+        currency_id: price.currency_id,
+        price_type: price.price_type,
+        price: Number(price.price || 0),
+        is_default: !!price.is_default,
+        is_active: true
+    };
+
+    const response = await fetch(
+        `/api/product-prices/${priceId}`,
+        {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(
+            data.error ||
+            "تعذر تفعيل السعر"
+        );
+        return;
+    }
+
+    showPricingMessage("تم تفعيل السعر");
+
+    await loadProductPrices(editingProductId);
+}
+
+
+async function prepareProductPricing(product) {
+
+    const section =
+        document.getElementById("productPricingSection");
+
+    if (!product || !product.id) {
+        section.style.display = "none";
+        return;
+    }
+
+    section.style.display = "block";
+
+    document.getElementById("productPricingCurrentProduct")
+        .textContent =
+            `${product.code || ""} - ${product.name || ""}`;
+
+    fillPricingUnits(product);
+
+    resetProductPriceForm();
+
+    await loadProductPrices(product.id);
+}
+
+
+
+async function loadProducts() {
+
+    const response = await fetch("/api/products");
+
+    if (!response.ok) {
+        showProductMessage("تعذر تحميل المنتجات", "error");
+        return;
+    }
+
+    const data = await response.json();
+
+    products = data.items || [];
+
+    renderProducts();
+}
+
+function renderProducts() {
+
+    const tbody =
+        document.getElementById("productsTableBody");
+
+    const search =
+        document.getElementById("productSearch")
+            .value
+            .trim()
+            .toLowerCase();
+
+    const status =
+        document.getElementById("productStatusFilter").value;
+
+    const category =
+        document.getElementById("productCategoryFilter").value;
+
+    const filtered = products.filter(product => {
+
+        const text = [
+            product.code,
+            product.name,
+            product.brand,
+            product.model,
+            product.category_name,
+            product.unit_name
+        ]
+        .join(" ")
+        .toLowerCase();
+
+        if (search && !text.includes(search)) {
+            return false;
+        }
+
+        if (
+            status !== "" &&
+            String(product.is_active) !== status
+        ) {
+            return false;
+        }
+
+        if (
+            category !== "" &&
+            String(product.category_id) !== category
+        ) {
+            return false;
+        }
+
+        return true;
+    });
+
+    if (!filtered.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" style="text-align:center;">
+                    لا توجد منتجات
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map((product, index) => {
+
+        const stockText =
+            `${Number(product.min_stock || 0)} / ` +
+            `${Number(product.max_stock || 0)}`;
+
+        return `
+            <tr class="${product.is_active ? "" : "status-inactive"}">
+
+                <td>${index + 1}</td>
+
+                <td>
+                    <strong>${escapeHtml(product.code)}</strong>
+                </td>
+
+                <td>
+                    ${escapeHtml(product.name)}
+                </td>
+
+                <td>
+                    ${escapeHtml(product.category_name || "-")}
+                </td>
+
+                <td>
+                    ${escapeHtml(product.unit_name || "-")}
+                </td>
+
+                <td>
+                    ${escapeHtml(product.brand || "-")}
+                </td>
+
+                <td>
+                    ${escapeHtml(product.model || "-")}
+                </td>
+
+                <td>
+                    ${escapeHtml(stockText)}
+                </td>
+
+                <td>
+                    ${
+                        product.is_active
+                        ? '<span class="status-active">نشط</span>'
+                        : '<span class="status-inactive">غير نشط</span>'
+                    }
+                </td>
+
+                <td>
+
+                    <div class="product-actions">
+
+                        <button
+                            type="button"
+                            class="btn"
+                            onclick="editProduct(${product.id})">
+                            ✏️ تعديل
+                        </button>
+
+                        ${
+                            product.is_active
+                            ?
+                            `<button
+                                type="button"
+                                class="btn"
+                                onclick="changeProductStatus(${product.id}, false)">
+                                ⛔ تعطيل
+                            </button>`
+                            :
+                            `<button
+                                type="button"
+                                class="btn"
+                                onclick="changeProductStatus(${product.id}, true)">
+                                ✅ تفعيل
+                            </button>`
+                        }
+
+                        <button
+                            type="button"
+                            class="btn"
+                            onclick="deleteProduct(${product.id})">
+                            🗑️ حذف
+                        </button>
+
+                    </div>
+
+                </td>
+
+            </tr>
+        `;
+
+    }).join("");
+}
+
+function openProductForm(product = null) {
+
+    document.getElementById("productFormCard").style.display = "block";
+
+    if (!product) {
+
+        editingProductId = null;
+
+        document.getElementById("productFormTitle")
+            .textContent = "إضافة منتج";
+
+        document.getElementById("productCode").value = "";
+        document.getElementById("productName").value = "";
+        document.getElementById("productCategory").value = "";
+        document.getElementById("productUnit").value = "";
+        document.getElementById("productBrand").value = "";
+        document.getElementById("productModel").value = "";
+        document.getElementById("productDescription").value = "";
+        document.getElementById("productSpecifications").value = "";
+
+        document.getElementById("productMinStock").value = "0";
+        document.getElementById("productMaxStock").value = "0";
+
+        document.getElementById("productIsStock").checked = true;
+        document.getElementById("productDecimalQty").checked = true;
+        document.getElementById("productExpiry").checked = false;
+        document.getElementById("productLot").checked = false;
+        document.getElementById("productSerial").checked = false;
+
+    } else {
+
+        editingProductId = product.id;
+
+        document.getElementById("productFormTitle")
+            .textContent = "تعديل المنتج";
+
+        document.getElementById("productCode").value =
+            product.code || "";
+
+        document.getElementById("productName").value =
+            product.name || "";
+
+        document.getElementById("productCategory").value =
+            product.category_id ?? "";
+
+        document.getElementById("productUnit").value =
+            product.base_unit_id ?? "";
+
+        document.getElementById("productBrand").value =
+            product.brand || "";
+
+        document.getElementById("productModel").value =
+            product.model || "";
+
+        document.getElementById("productDescription").value =
+            product.description || "";
+
+        document.getElementById("productSpecifications").value =
+            product.specifications || "";
+
+        document.getElementById("productMinStock").value =
+            product.min_stock ?? 0;
+
+        document.getElementById("productMaxStock").value =
+            product.max_stock ?? 0;
+
+        document.getElementById("productIsStock").checked =
+            !!product.is_stock_item;
+
+        document.getElementById("productDecimalQty").checked =
+            !!product.allow_decimal_qty;
+
+        document.getElementById("productExpiry").checked =
+            !!product.track_expiry;
+
+        document.getElementById("productLot").checked =
+            !!product.track_lot;
+
+        document.getElementById("productSerial").checked =
+            !!product.track_serial;
+    }
+
+    document.getElementById("productCode").focus();
+
+    if (product && product.id) {
+        prepareProductPricing(product).catch(error => {
+            console.error(error);
+            showPricingMessage(
+                error.message || "تعذر تحميل أسعار المنتج",
+                "error"
+            );
+        });
+    } else {
+        document.getElementById("productPricingSection").style.display = "none";
+        productPrices = [];
+        editingPriceId = null;
+    }
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
+
+function closeProductForm() {
+
+    editingProductId = null;
+
+    document.getElementById("productFormCard").style.display = "none";
+}
+
+async function saveProduct() {
+
+    const code =
+        document.getElementById("productCode").value.trim();
+
+    const name =
+        document.getElementById("productName").value.trim();
+
+    const category =
+        document.getElementById("productCategory").value;
+
+    const unit =
+        document.getElementById("productUnit").value;
+
+    if (!code) {
+        alert("كود المنتج مطلوب");
+        return;
+    }
+
+    if (!name) {
+        alert("اسم المنتج مطلوب");
+        return;
+    }
+
+    if (!unit) {
+        alert("وحدة القياس الأساسية مطلوبة");
+        return;
+    }
+
+    const minStock =
+        Number(document.getElementById("productMinStock").value || 0);
+
+    const maxStock =
+        Number(document.getElementById("productMaxStock").value || 0);
+
+    if (minStock < 0 || maxStock < 0) {
+        alert("حدود المخزون لا يمكن أن تكون سالبة");
+        return;
+    }
+
+    if (maxStock > 0 && maxStock < minStock) {
+        alert("الحد الأقصى للمخزون لا يمكن أن يكون أقل من الحد الأدنى");
+        return;
+    }
+
+    const payload = {
+
+        category_id:
+            category === ""
+            ? null
+            : Number(category),
+
+        code,
+        name,
+
+        base_unit_id:
+            Number(unit),
+
+        description:
+            document.getElementById("productDescription").value.trim(),
+
+        brand:
+            document.getElementById("productBrand").value.trim(),
+
+        model:
+            document.getElementById("productModel").value.trim(),
+
+        specifications:
+            document.getElementById("productSpecifications").value.trim(),
+
+        is_stock_item:
+            document.getElementById("productIsStock").checked,
+
+        allow_decimal_qty:
+            document.getElementById("productDecimalQty").checked,
+
+        track_expiry:
+            document.getElementById("productExpiry").checked,
+
+        track_lot:
+            document.getElementById("productLot").checked,
+
+        track_serial:
+            document.getElementById("productSerial").checked,
+
+        min_stock: minStock,
+        max_stock: maxStock
+    };
+
+    const url =
+        editingProductId
+        ? `/api/products/${editingProductId}`
+        : "/api/products";
+
+    const method =
+        editingProductId
+        ? "PUT"
+        : "POST";
+
+    const response = await fetch(url, {
+        method,
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(data.error || "تعذر حفظ المنتج");
+        return;
+    }
+
+    const savedProductId =
+        editingProductId ||
+        data.product_id ||
+        data.id;
+
+    showProductMessage(
+        editingProductId
+        ? "تم تعديل المنتج بنجاح"
+        : "تم إضافة المنتج بنجاح"
+    );
+
+    await loadProducts();
+
+    if (savedProductId) {
+
+        const savedProduct =
+            products.find(
+                p => Number(p.id) === Number(savedProductId)
+            );
+
+        if (savedProduct) {
+            openProductForm(savedProduct);
+            showPricingMessage(
+                "تم حفظ المنتج. يمكنك الآن إضافة أسعار البيع والشراء."
+            );
+            return;
+        }
+    }
+
+    closeProductForm();
+}
+
+async function editProduct(id) {
+
+    const product =
+        products.find(p => p.id === id);
+
+    if (!product) {
+        alert("المنتج غير موجود");
+        return;
+    }
+
+    openProductForm(product);
+}
+
+async function changeProductStatus(id, activate) {
+
+    const action =
+        activate
+        ? "تفعيل"
+        : "تعطيل";
+
+    if (!confirm(`هل تريد ${action} هذا المنتج؟`)) {
+        return;
+    }
+
+    const response = await fetch(
+        `/api/products/${id}/${activate ? "activate" : "deactivate"}`,
+        {
+            method: "POST"
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(data.error || `تعذر ${action} المنتج`);
+        return;
+    }
+
+    showProductMessage(
+        activate
+        ? "تم تفعيل المنتج"
+        : "تم تعطيل المنتج"
+    );
+
+    await loadProducts();
+}
+
+async function deleteProduct(id) {
+
+    const product =
+        products.find(p => p.id === id);
+
+    if (!product) {
+        alert("المنتج غير موجود");
+        return;
+    }
+
+    if (
+        !confirm(
+            `هل أنت متأكد من حذف المنتج "${product.name}"؟`
+        )
+    ) {
+        return;
+    }
+
+    const response = await fetch(
+        `/api/products/${id}`,
+        {
+            method: "DELETE"
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(data.error || "تعذر حذف المنتج");
+        return;
+    }
+
+    showProductMessage("تم حذف المنتج");
+
+    await loadProducts();
+}
+
+async function initProductsPage() {
+
+    try {
+
+        await loadCategories();
+        await loadUnits();
+        await loadCurrencies();
+        await loadProducts();
+
+    } catch (error) {
+
+        console.error(error);
+
+        showProductMessage(
+            error.message || "حدث خطأ أثناء تحميل الصفحة",
+            "error"
+        );
+    }
+}
+
+document.addEventListener(
+    "DOMContentLoaded",
+    initProductsPage
+);
+</script>
+
+{% endblock %}

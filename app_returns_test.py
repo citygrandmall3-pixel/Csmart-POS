@@ -98,6 +98,27 @@ def _sanitize(value):
     return value
 
 
+
+def _generate_company_code(table, company_id, prefix):
+    """إنشاء كود تلقائي فريد داخل الشركة دون تعديل الأكواد الحالية."""
+    allowed_tables = {"products", "units", "product_categories", "warehouses", "business_partners"}
+    if table not in allowed_tables:
+        raise ValueError("جدول الأكواد غير مسموح")
+    row = db.query_one(
+        f"SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM {table} WHERE company_id=?",
+        (company_id,),
+    )
+    number = int((row or {}).get("next_id") or 1)
+    while True:
+        code = f"{prefix}-{number:06d}"
+        exists = db.query_one(
+            f"SELECT id FROM {table} WHERE company_id=? AND code=?",
+            (company_id, code),
+        )
+        if not exists:
+            return code
+        number += 1
+
 def _sanitize_dict(d):
     if not isinstance(d, dict):
         return d
@@ -831,16 +852,9 @@ def api_partners_create():
 
     company_id = company["id"]
 
-    if partner_type == "supplier" and not code:
-        last_code = db.query_one(
-            """SELECT MAX(CAST(SUBSTR(code, 5) AS INTEGER)) AS last_no
-               FROM business_partners
-               WHERE company_id=? AND partner_type IN (?,?)
-                 AND code LIKE ?""",
-            (company_id, "supplier", "both", "SUP-%"),
-        )
-        next_no = int((last_code or {}).get("last_no") or 0) + 1
-        code = "SUP-%06d" % next_no
+    if not code:
+        prefix = {"customer": "CUS", "supplier": "SUP", "both": "PAR"}[partner_type]
+        code = _generate_company_code("business_partners", company_id, prefix)
 
     if db.query_one(
         "SELECT id FROM business_partners WHERE company_id=? AND code=?",
@@ -943,7 +957,7 @@ def api_partners_update(partner_id):
     if not partner:
         return jsonify(error="العميل/المورد غير موجود"), 404
 
-    code = (d.get("code") or "").strip()
+    code = (d.get("code") or partner["code"] or "").strip()
     name = (d.get("name") or "").strip()
     partner_type = (d.get("partner_type") or "").strip()
 
@@ -1736,11 +1750,10 @@ def api_unit_create():
 
     code = str(d.get("code") or "").strip()
     name = str(d.get("name") or "").strip()
+    if not code:
+        code = _generate_company_code("units", company_id, "UNT")
     symbol = str(d.get("symbol") or "").strip()
     unit_type = str(d.get("unit_type") or "quantity").strip()
-
-    if not code:
-        return jsonify(error="كود الوحدة مطلوب"), 400
 
     if not name:
         return jsonify(error="اسم الوحدة مطلوب"), 400
@@ -2106,11 +2119,10 @@ def api_product_category_create():
 
     code = str(d.get("code") or "").strip()
     name = str(d.get("name") or "").strip()
+    if not code:
+        code = _generate_company_code("product_categories", company_id, "CAT")
     description = str(d.get("description") or "").strip()
     parent_id = d.get("parent_id")
-
-    if not code:
-        return jsonify(error="كود التصنيف مطلوب"), 400
 
     if not name:
         return jsonify(error="اسم التصنيف مطلوب"), 400
@@ -3602,9 +3614,8 @@ def api_product_create():
 
     code = str(d.get("code") or "").strip()
     name = str(d.get("name") or "").strip()
-
     if not code:
-        return jsonify(error="كود المنتج مطلوب"), 400
+        code = _generate_company_code("products", company_id, "PRD")
 
     if not name:
         return jsonify(error="اسم المنتج مطلوب"), 400
@@ -4234,9 +4245,8 @@ def api_warehouse_create():
 
     code = str(data.get("code") or "").strip()
     name = str(data.get("name") or "").strip()
-
     if not code:
-        return jsonify(error="كود المخزن مطلوب"), 400
+        code = _generate_company_code("warehouses", company_id, "WH")
 
     if not name:
         return jsonify(error="اسم المخزن مطلوب"), 400
