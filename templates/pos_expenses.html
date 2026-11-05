@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مصروفات الكاشير POS</title>
+<style>
+body{font-family:Tahoma,Arial,sans-serif;background:#1e1e2f;color:#fff;margin:0;padding:22px}
+.wrap{max-width:1100px;margin:auto}.card{background:#2a2a40;border:1px solid #444;border-radius:10px;padding:20px;margin:0 0 20px}
+h1,h2{margin-top:0}.grid{display:grid;grid-template-columns:2fr 1fr auto;gap:10px}
+input,button{font:inherit;padding:11px;border-radius:6px;border:1px solid #555}
+input{background:#171725;color:#fff;min-width:0}button,.back{background:#dc3545;color:#fff;border:0;cursor:pointer;font-weight:bold}
+button:disabled{opacity:.6;cursor:wait}.back{display:inline-block;background:#596579;padding:9px 18px;border-radius:6px;text-decoration:none;margin-bottom:14px}
+.msg{margin-top:12px;min-height:22px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:600px}th,td{padding:11px;border:1px solid #444;text-align:right}th{background:#1e1e2f}
+@media(max-width:650px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body><main class="wrap">
+<a class="back" href="/pos-inventory">رجوع إلى مخزن الكاشير</a>
+<h1>💸 مصروفات الكاشير POS</h1>
+<section class="card"><h2>تسجيل مصروف جديد</h2>
+<div class="grid"><input id="expDesc" type="text" maxlength="500" placeholder="وصف المصروف (مثلاً: أكياس)"><input id="expAmount" type="number" min="0.01" step="0.01" placeholder="المبلغ"><button id="saveBtn" onclick="saveExpense()">حفظ المصروف</button></div>
+<div id="expMsg" class="msg" role="status"></div></section>
+<section class="card"><h2>آخر المصروفات</h2><div class="table-wrap"><table><thead><tr><th>#</th><th>الوصف</th><th>المبلغ</th><th>التاريخ</th></tr></thead><tbody id="expensesBody"><tr><td colspan="4">جاري التحميل...</td></tr></tbody></table></div></section>
+</main>
+<script>
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function showMsg(t,ok){const x=document.getElementById("expMsg");x.textContent=t;x.style.color=ok?"#72df9b":"#ff7777"}
+async function loadExpenses(){const body=document.getElementById("expensesBody");try{const r=await fetch("/api/pos/expenses/list");const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"تعذر تحميل المصروفات");const rows=d.expenses||[];body.innerHTML=rows.length?rows.map((e,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(e.description)+'</td><td>'+Number(e.amount||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td>'+esc(e.created_at||"")+'</td></tr>').join(""):'<tr><td colspan="4" style="text-align:center">لا توجد مصروفات مسجلة</td></tr>'}catch(e){body.innerHTML='<tr><td colspan="4">'+esc(e.message)+'</td></tr>'}}
+async function saveExpense(){const desc=document.getElementById("expDesc").value.trim(),amount=Number(document.getElementById("expAmount").value),btn=document.getElementById("saveBtn");if(!desc||!Number.isFinite(amount)||amount<=0){showMsg("أدخل وصفًا ومبلغًا صحيحًا أكبر من صفر.",false);return}btn.disabled=true;try{const r=await fetch("/api/pos/expense",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({description:desc,amount})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"تعذر حفظ المصروف");document.getElementById("expDesc").value="";document.getElementById("expAmount").value="";showMsg(d.message||"تم تسجيل المصروف بنجاح",true);await loadExpenses()}catch(e){showMsg(e.message,false)}finally{btn.disabled=false}}
+window.addEventListener("load",loadExpenses);
+</script></body></html>
