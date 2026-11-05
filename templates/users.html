@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <h2>👥 إدارة المستخدمين</h2>
+    <button class="btn btn-gold" onclick="openAddModal()">➕ إضافة مستخدم</button>
+</div>
+
+{% if is_dev %}
+<div class="card" style="margin-bottom:18px; padding:18px; border:1px solid #d7dee8;">
+    <h3 style="margin-top:0;">🔐 كلمة مرور المطور المستقلة</h3>
+    <p style="margin:6px 0 14px; color:#64748b;">يضبطها مطور النظام فقط. يمكن تحديثها من حساب المطور، ولا تُطلب كشرط لاستخدام صلاحياته.</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px;">
+        <div><label>كلمة مرور المدير الحالية</label><input id="dev-current-password" type="password" autocomplete="current-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
+        <div><label>كلمة مرور المطور الجديدة</label><input id="dev-new-password" type="password" autocomplete="new-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
+        <div><label>تأكيد كلمة مرور المطور</label><input id="dev-confirm-password" type="password" autocomplete="new-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
+    </div>
+    <div id="dev-password-message" role="status" style="margin:10px 0;color:#b91c1c;"></div>
+    <button class="btn btn-gold" type="button" onclick="saveDevMasterPassword()">حفظ كلمة مرور المطور</button>
+</div>
+{% endif %}
+
+<div class="card">
+    <table style="width:100%; border-collapse:collapse;">
+        <thead>
+            <tr style="background:#f1f5f9;">
+                <th style="padding:10px; border:1px solid #ddd;">#</th>
+                <th style="padding:10px; border:1px solid #ddd;">الاسم</th>
+                <th style="padding:10px; border:1px solid #ddd;">اسم المستخدم</th>
+                <th style="padding:10px; border:1px solid #ddd;">الدور</th>
+                <th style="padding:10px; border:1px solid #ddd;">الإجراءات</th>
+            </tr>
+        </thead>
+        <tbody id="usersTableBody">
+            <tr><td colspan="5" style="text-align:center; padding:20px;">جاري التحميل...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- نافذة إضافة مستخدم -->
+<div id="addModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:400px; margin:auto; text-align:right;">
+        <h3 style="margin-top:0; border-bottom:2px solid #eee; padding-bottom:10px;">➕ إضافة مستخدم جديد</h3>
+        <div style="margin-bottom:10px;">
+            <label>الاسم الكامل:</label>
+            <input type="text" id="u-name" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:5px;">
+        </div>
+        <div style="margin-bottom:10px;">
+            <label>اسم المستخدم:</label>
+            <input type="text" id="u-user" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:5px;">
+        </div>
+        <div style="margin-bottom:10px;">
+            <label>كلمة المرور:</label>
+            <input type="password" id="u-pass" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:5px;">
+        </div>
+        <div style="margin-bottom:10px;">
+            <label>تأكيد كلمة المرور:</label>
+            <input type="password" id="u-pass-confirm" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:5px;">
+        </div>
+        <div style="margin-bottom:15px;">
+            <label>الدور:</label>
+            <select id="u-role" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:5px;">
+                <option value="cashier">كاشير</option>
+                <option value="accountant">محاسب</option>
+                {% if is_dev %}<option value="admin">مدير</option>{% endif %}
+                <option value="viewer">مشاهدة فقط</option>
+                {% if is_dev %}<option value="dev">مطور النظام</option>{% endif %}
+            </select>
+        </div>
+        <div id="modalMsg" style="color:red; font-weight:bold; margin-bottom:10px; text-align:center; font-size:16px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="addUser()" style="flex:1; background:#28a745; color:white; padding:10px; border:none; border-radius:5px; cursor:pointer;">حفظ</button>
+            <button onclick="closeAddModal()" style="flex:1; background:#6c757d; color:white; padding:10px; border:none; border-radius:5px; cursor:pointer;">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- نافذة تغيير كلمة المرور -->
+<div id="pwModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:400px; margin:auto; text-align:right;">
+        <h3 style="margin-top:0; border-bottom:2px solid #eee; padding-bottom:10px;">🔑 تغيير كلمة المرور</h3>
+        <input type="hidden" id="pw-id">
+        <div style="margin-bottom:15px;">
+            <label>كلمة المرور الجديدة:</label>
+            <input type="password" id="pw-new" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:5px;">
+        </div>
+        <div id="pwMsg" style="color:red; font-weight:bold; margin-bottom:10px; text-align:center; font-size:16px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="savePw()" style="flex:1; background:#28a745; color:white; padding:10px; border:none; border-radius:5px; cursor:pointer;">حفظ</button>
+            <button onclick="closePwModal()" style="flex:1; background:#6c757d; color:white; padding:10px; border:none; border-radius:5px; cursor:pointer;">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<script>
+async function api(url, options={}) {
+  const res = await fetch(url, {
+    method: options.method || "GET",
+    headers: { "Content-Type": "application/json" },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "حدث خطأ");
+  return data;
+}
+
+async function loadUsers() {
+    try {
+        const res = await fetch('/api/users');
+        const users = await res.json();
+        const tbody = document.getElementById('usersTableBody');
+        tbody.innerHTML = users.map(u => `
+            <tr>
+                <td style="padding:8px; border:1px solid #ddd;">${u.id}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${u.full_name}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${u.username}</td>
+                <td style="padding:8px; border:1px solid #ddd;">${u.role}</td>
+                <td style="padding:8px; border:1px solid #ddd;">
+                    <button onclick="openPwModal(${u.id})" style="background:#ffc107; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🔑 كلمة المرور</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+function openAddModal() { document.getElementById('addModal').style.display = 'flex'; document.getElementById('modalMsg').innerText = ''; }
+function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+function openPwModal(id) { document.getElementById('pw-id').value = id; document.getElementById('pwModal').style.display = 'flex'; document.getElementById('pwMsg').innerText = ''; }
+function closePwModal() { document.getElementById('pwModal').style.display = 'none'; }
+
+async function addUser() {
+    const name = document.getElementById('u-name').value.trim();
+    const user = document.getElementById('u-user').value.trim();
+    const pass = document.getElementById('u-pass').value;
+    const confirm = document.getElementById('u-pass-confirm').value;
+    const role = document.getElementById('u-role').value;
+    const msg = document.getElementById('modalMsg');
+
+    if (pass !== confirm) { msg.innerText = "كلمتا المرور غير متطابقتين!"; return; }
+    if (pass.length < 8) { msg.innerText = "كلمة المرور يجب أن تكون 8 أحرف على الأقل!"; return; }
+    
+    msg.innerText = "جاري الحفظ...";
+    msg.style.color = "#0d6efd";
+
+    try {
+        await api('/api/users', { method: 'POST', body: { full_name: name, username: user, password: pass, role: role } });
+        closeAddModal();
+        alert('✅ تمت إضافة المستخدم بنجاح');
+        loadUsers();
+    } catch (e) { msg.innerText = "❌ " + e.message; msg.style.color = "red"; }
+}
+
+async function savePw() {
+    const id = document.getElementById('pw-id').value;
+    const newPass = document.getElementById('pw-new').value;
+    const msg = document.getElementById('pwMsg');
+    if (newPass.length < 8) { msg.innerText = "كلمة المرور يجب أن تكون 8 أحرف على الأقل!"; return; }
+    
+    msg.innerText = "جاري الحفظ...";
+    msg.style.color = "#0d6efd";
+
+    try {
+        await api(`/api/users/${id}/password`, { method: 'POST', body: { password: newPass } });
+        closePwModal();
+        alert('✅ تم تغيير كلمة المرور');
+    } catch (e) { msg.innerText = "❌ " + e.message; msg.style.color = "red"; }
+}
+
+async function saveDevMasterPassword() {
+    const current = document.getElementById('dev-current-password').value;
+    const password = document.getElementById('dev-new-password').value;
+    const confirm = document.getElementById('dev-confirm-password').value;
+    const msg = document.getElementById('dev-password-message');
+    if (!current) { msg.innerText = "أدخل كلمة مرور المدير الحالية."; return; }
+    if (password.length < 12) { msg.innerText = "كلمة مرور المطور يجب ألا تقل عن 12 حرفًا."; return; }
+    if (password !== confirm) { msg.innerText = "كلمتا مرور المطور غير متطابقتين."; return; }
+    msg.style.color = "#0d6efd";
+    msg.innerText = "جاري الحفظ...";
+    try {
+        await api('/api/dev-security/password', { method: 'POST', body: { current_password: current, new_password: password } });
+        document.getElementById('dev-current-password').value = "";
+        document.getElementById('dev-new-password').value = "";
+        document.getElementById('dev-confirm-password').value = "";
+        msg.style.color = "#15803d";
+        msg.innerText = "تم حفظ كلمة مرور المطور بشكل مشفر.";
+    } catch (e) {
+        msg.style.color = "#b91c1c";
+        msg.innerText = e.message;
+    }
+}
+
+window.addEventListener('load', loadUsers);
+</script>
+{% endblock %}

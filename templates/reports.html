@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>التقارير</title>
+    <style>
+        body { font-family: sans-serif; background: #1e1e2f; color: white; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; }
+        .toolbar { display: flex; gap: 10px; margin-bottom: 20px; background: #2a2a40; padding: 15px; border-radius: 8px; align-items: center; }
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-daily { background: #28a745; }
+        .btn-weekly { background: #ffc107; color: #333; }
+        .btn-monthly { background: #17a2b8; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .card { background: #2a2a40; padding: 20px; border-radius: 8px; border: 1px solid #444; }
+        .card h2 { margin-top: 0; border-bottom: 2px solid #444; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { padding: 8px; border: 1px solid #444; text-align: center; }
+        th { background: #1e1e2f; color: #ffc107; }
+        .total-box { font-size: 20px; font-weight: bold; color: #28a745; text-align: left; margin-top: 10px; }
+        .stock-low { color: #ff6b6b; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 تقارير النظام</h1>
+    
+    <div class="toolbar">
+        <strong>تحميل التقرير:</strong>
+        <button class="btn btn-daily" onclick="downloadReport('daily')">📅 يومي</button>
+        <button class="btn btn-weekly" id="btnWeekly" onclick="downloadReport('weekly')" style="display:none;">🗓️ أسبوعي (للمدير فقط)</button>
+        <button class="btn btn-monthly" id="btnMonthly" onclick="downloadReport('monthly')" style="display:none;">📆 شهري (للمدير فقط)</button>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>💰 آخر المبيعات</h2>
+            <table id="salesTable">
+                <thead><tr><th>رقم الفاتورة</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
+                <tbody><tr><td colspan="3">جاري التحميل...</td></tr></tbody>
+            </table>
+            <div class="total-box" id="salesTotal">الإجمالي: 0.00</div>
+        </div>
+
+        <div class="card">
+            <h2>💸 آخر المصروفات</h2>
+            <table id="expensesTable">
+                <thead><tr><th>الوصف</th><th>المبلغ</th><th>بواسطة</th><th>التاريخ</th></tr></thead>
+                <tbody><tr><td colspan="3">جاري التحميل...</td></tr></tbody>
+            </table>
+            <div class="total-box" id="expensesTotal" style="color: #dc3545;">الإجمالي: 0.00</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📦 حالة المخزون (الأقل أولاً)</h2>
+        <table id="stockTable">
+            <thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th></tr></thead>
+            <tbody><tr><td colspan="3">جاري التحميل...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function downloadReport(type) {
+        window.location.href = '/api/reports/download?type=' + type;
+    }
+
+    async function loadSales() {
+        const res = await fetch('/api/reports/sales');
+        const data = await res.json();
+        if(data.ok) {
+            document.getElementById('salesTotal').innerText = 'الإجمالي: ' + data.total.toFixed(2) + ' ل.س';
+            document.querySelector('#salesTable tbody').innerHTML = data.sales.map(s => 
+                `<tr><td>${s.invoice_no}</td><td>${s.grand_total.toFixed(2)}</td><td>${s.created_at || ''}</td></tr>`
+            ).join('');
+        }
+    }
+
+    async function loadExpenses() {
+        const res = await fetch('/api/reports/expenses');
+        const data = await res.json();
+        if(data.ok) {
+            document.getElementById('expensesTotal').innerText = 'الإجمالي: ' + data.total.toFixed(2) + ' ل.س';
+            document.querySelector('#expensesTable tbody').innerHTML = data.expenses.map(e => 
+                `<tr><td>${e.description}</td><td>${e.amount.toFixed(2)}</td><td>${e.user_name || 'غير معروف'}</td><td>${e.created_at || ''}</td></tr>`
+            ).join('');
+        }
+    }
+
+    async function loadStock() {
+        const res = await fetch('/api/reports/stock');
+        const data = await res.json();
+        if(data.ok) {
+            document.querySelector('#stockTable tbody').innerHTML = data.stock.map(p => {
+                const qty = Number(p.quantity || 0);
+                const color = qty < 10 ? 'class="stock-low"' : '';
+                return `<tr><td>${p.code}</td><td>${p.name}</td><td ${color}>${qty}</td></tr>`;
+            }).join('');
+        }
+    }
+
+    const isAdmin = {{ is_admin | tojson }};
+    if (isAdmin) {
+        document.getElementById("btnWeekly").style.display = "inline-block";
+        document.getElementById("btnMonthly").style.display = "inline-block";
+    }
+
+    window.onload = () => {
+        loadSales();
+        loadExpenses();
+        loadStock();
+    };
+</script>
+</body>
+</html>

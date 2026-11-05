@@ -11,12 +11,12 @@
       {% if user.role != 'viewer' %}
       <button class="btn btn-teal btn-sm" onclick="openAccModal()">➕ حساب جديد</button>
       {% endif %}
-      {% if user.role == 'admin' or user.role == 'accountant' %}
+      {% if user.role in ('admin', 'dev', 'accountant') %}
       <button class="btn btn-dark btn-sm" onclick="openModal('importModal')">📥 استيراد</button>
       {% endif %}
       <a class="btn btn-dark btn-sm" href="/templates/accounts.xlsx">📄 القالب</a>
       <a class="btn btn-gold btn-sm" href="/accounts/export.xlsx">📊 تصدير Excel</a>
-      {% if user.role == 'admin' %}
+      {% if user.role in ('admin', 'dev') %}
       <button class="btn btn-red btn-sm" onclick="wipeAll()">🗑️ مسح الشجرة كاملة</button>
       {% endif %}
     </div>

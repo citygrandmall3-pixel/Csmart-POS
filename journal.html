@@ -12,7 +12,7 @@
       {% endif %}
       <button class="btn btn-dark btn-sm" onclick="openModal('impModal')">📥 استيراد</button>
       <a class="btn btn-dark btn-sm" href="/templates/journal.xlsx">📄 القالب</a>
-      {% if user.role == 'admin' %}
+      {% if user.role in ('admin', 'dev') %}
       <button class="btn btn-red btn-sm" onclick="openModal('wipeModal')">🧹 مسح قيود</button>
       {% endif %}
     </div>
@@ -127,7 +127,7 @@
 </div>
 
 <!-- مودال مسح القيود (أدمن فقط) -->
-{% if user.role == 'admin' %}
+{% if user.role in ('admin', 'dev') %}
 <div class="modal-overlay" id="wipeModal">
   <div class="modal">
     <div class="modal-head"><h3>🧹 مسح القيود</h3>
@@ -381,7 +381,7 @@ async function delEntry(id, status) {
   catch (e) { toast(e.message, 'err'); }
 }
 
-{% if user.role == 'admin' %}
+{% if user.role in ('admin', 'dev') %}
 async function doWipe() {
   const scope = $('input[name=wipe-scope]:checked').value;
   const month = $('#wipe-month').value;

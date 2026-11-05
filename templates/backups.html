@@ -2,7 +2,28 @@
 {% block content %}
 <div class="card" style="padding:20px;">
     <h2>💾 النسخ الاحتياطية المتاحة</h2>
-    <p>هذه الصفحة تعرض جميع النسخ الاحتياطية المحفوظة على الخادم.</p>
+    <p>هذه الصفحة تعرض النسخ الاحتياطية وتتيح إنشاء نسخة أو استعادة نسخة محفوظة.</p>
+    <button class="btn btn-gold" type="button" onclick="createBackup()">إنشاء نسخة احتياطية الآن</button>
+    <span id="backupMessage" style="margin-right:10px;"></span>
+    <div class="card" style="margin-top:18px;padding:16px;border:1px solid #d7dee8;">
+        <h3 style="margin-top:0;">إعدادات النسخ الاحتياطي</h3>
+        <div id="backupSettingsMessage" style="margin:8px 0;"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;">
+            <label><input type="checkbox" id="bs-email-enabled"> تفعيل إرسال النسخ بالبريد</label>
+            <label><input type="checkbox" id="bs-session-close"> إرسال نسخة عند إغلاق الوردية</label>
+            <label><input type="checkbox" id="bs-daily"> إرسال نسخة يومية</label>
+            <label><input type="checkbox" id="bs-local-enabled"> تفعيل النسخ المحلي</label>
+            <label>البريد المستلم<input id="bs-email-to" type="email" style="width:100%;padding:8px;"></label>
+            <label>نوع النسخة<select id="bs-backup-type" style="width:100%;padding:8px;"><option value="full">كاملة</option><option value="database">قاعدة البيانات</option></select></label>
+        </div>
+        <button class="btn btn-gold" type="button" style="margin-top:12px;" onclick="saveBackupSettings()">حفظ إعدادات النسخ</button>
+    </div>
+    <div class="card" style="margin-top:18px;padding:16px;border:1px solid #d7dee8;">
+        <h3 style="margin-top:0;">استعادة نسخة من ملف خارجي</h3>
+        <input type="file" id="backupUploadFile" accept=".db,.sqlite,.sqlite3">
+        <button class="btn btn-gold" type="button" onclick="restoreUploadedBackup()">استعادة الملف المحدد</button>
+        <small style="display:block;margin-top:8px;">سيتم فحص سلامة ملف قاعدة البيانات قبل الاستعادة.</small>
+    </div>
     <table style="width:100%; border-collapse:collapse; margin-top:15px;">
         <thead>
             <tr style="background:#1e1e2f; color:#ffc107;">
@@ -21,6 +42,7 @@
                         <td style="padding:8px; border:1px solid #444;">{{ b.size }} bytes</td>
                         <td style="padding:8px; border:1px solid #444;">
                             <a href="/api/backups/{{ b.name }}" class="btn btn-sm btn-teal">⬇️ تنزيل</a>
+                            <button type="button" class="btn btn-sm btn-gold" onclick="restoreBackup({{ b.name|tojson }})">استعادة</button>
                         </td>
                     </tr>
                 {% endfor %}
@@ -33,4 +55,93 @@
         <a href="/settings" class="btn btn-gold">⬅️ العودة للإعدادات</a>
     </div>
 </div>
+<script>
+const BACKUP_USER_ROLE = {{ user_role|tojson }};
+async function createBackup() {
+    const msg = document.getElementById('backupMessage');
+    msg.innerText = 'جاري إنشاء النسخة...';
+    try {
+        const r = await fetch('/api/backup', {method:'POST'});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'تعذر إنشاء النسخة');
+        msg.innerText = d.name ? 'تم إنشاء النسخة: ' + d.name : 'تم إنشاء النسخة بنجاح';
+        location.reload();
+    } catch(e) { msg.innerText = e.message; }
+}
+async function restoreBackup(name) {
+    if (!confirm('سيتم استبدال بيانات النظام ببيانات النسخة المحددة. هل تريد المتابعة؟')) return;
+    const body = {};
+    if (BACKUP_USER_ROLE === 'dev') {
+        const password = prompt('أدخل كلمة مرور المطور المستقلة لتأكيد الاستعادة:');
+        if (!password) return;
+        body.dev_password = password;
+    }
+    try {
+        const r = await fetch('/api/restore/' + encodeURIComponent(name), {
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'فشلت الاستعادة');
+        alert(d.message || 'تمت الاستعادة. أعد تسجيل الدخول.');
+        location.reload();
+    } catch(e) { alert(e.message); }
+}
+async function loadBackupSettings() {
+    try {
+        const r = await fetch('/api/backup-settings');
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'تعذر تحميل الإعدادات');
+        const s = d.settings || {};
+        document.getElementById('bs-email-enabled').checked = !!s.email_enabled;
+        document.getElementById('bs-session-close').checked = !!s.email_on_session_close;
+        document.getElementById('bs-daily').checked = !!s.email_daily;
+        document.getElementById('bs-local-enabled').checked = !!s.local_enabled;
+        document.getElementById('bs-email-to').value = s.email_to || '';
+        document.getElementById('bs-backup-type').value = s.backup_type || 'full';
+    } catch(e) { document.getElementById('backupSettingsMessage').innerText = e.message; }
+}
+async function saveBackupSettings() {
+    const body = {
+        email_enabled: document.getElementById('bs-email-enabled').checked ? 1 : 0,
+        email_on_session_close: document.getElementById('bs-session-close').checked ? 1 : 0,
+        email_daily: document.getElementById('bs-daily').checked ? 1 : 0,
+        local_enabled: document.getElementById('bs-local-enabled').checked ? 1 : 0,
+        email_to: document.getElementById('bs-email-to').value.trim(),
+        backup_type: document.getElementById('bs-backup-type').value
+    };
+    if (BACKUP_USER_ROLE === 'dev') {
+        const password = prompt('أدخل كلمة مرور المطور المستقلة لحفظ الإعدادات الحساسة:');
+        if (!password) return;
+        body.dev_password = password;
+    }
+    const msg = document.getElementById('backupSettingsMessage');
+    try {
+        const r = await fetch('/api/backup-settings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'تعذر حفظ الإعدادات');
+        msg.innerText = 'تم حفظ إعدادات النسخ الاحتياطي.';
+    } catch(e) { msg.innerText = e.message; }
+}
+async function restoreUploadedBackup() {
+    const file = document.getElementById('backupUploadFile').files[0];
+    if (!file) { alert('اختر ملف النسخة أولاً.'); return; }
+    if (!confirm('سيتم استبدال قاعدة البيانات الحالية بالملف المحدد. هل تريد المتابعة؟')) return;
+    const headers = {};
+    if (BACKUP_USER_ROLE === 'dev') {
+        const password = prompt('أدخل كلمة مرور المطور المستقلة لتأكيد الاستعادة:');
+        if (!password) return;
+        headers['X-DEV-Password'] = password;
+    }
+    const form = new FormData();
+    form.append('file', file);
+    try {
+        const r = await fetch('/api/restore-upload', {method:'POST',headers,body:form});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'فشلت استعادة الملف');
+        alert(d.message || 'تمت الاستعادة بنجاح.');
+        location.reload();
+    } catch(e) { alert(e.message); }
+}
+window.addEventListener('load', () => { loadBackupSettings(); });
+</script>
 {% endblock %}

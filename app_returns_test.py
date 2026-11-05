@@ -29,7 +29,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import database as db
 import excel_tools as xl
 
-ROLES = {"admin": "مدير النظام", "accountant": "محاسب", "cashier": "كاشير", "viewer": "مشاهدة فقط"}
+ROLES = {"admin": "مدير النظام", "accountant": "محاسب", "cashier": "كاشير", "viewer": "مشاهدة فقط", "dev": "مطور النظام"}
 ENTRY_TYPES = ["عادي", "تسوية", "افتتاحي", "إقفال"]
 
 # في النسخة المجمّعة (EXE) القوالب والملفات الثابتة تُفك داخل مجلد مؤقت _MEIPASS
@@ -124,7 +124,7 @@ def before():
 
 
 def can_write():
-    return g.user["role"] in ("admin", "accountant")
+    return g.user["role"] in ("admin", "dev", "accountant")
 
 
 def require_write(f):
@@ -137,12 +137,58 @@ def require_write(f):
 
 
 def admin_required(f):
+    """يسمح لمدير النظام ومطور النظام بصلاحيات الإدارة، مع امتيازات DEV الأعلى."""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if g.user["role"] != "admin":
-            return jsonify(error="هذه الصفحة لمدير النظام فقط"), 403
+        if g.user["role"] not in ("admin", "dev"):
+            return jsonify(error="هذه الصفحة لمدير النظام أو مطور النظام فقط"), 403
         return f(*args, **kwargs)
     return wrapper
+
+
+def dev_required(f):
+    """يقصر العملية على مطور النظام صاحب الصلاحيات الأعلى."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if g.user["role"] != "dev":
+            return jsonify(error="هذه العملية لمطور النظام فقط"), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def dev_or_admin_required(f):
+    """يسمح للمدير ومطور النظام بإدارة المستخدمين دون منحه صلاحيات مالية."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if g.user["role"] not in ("admin", "dev"):
+            return jsonify(error="هذه الصفحة للمدير أو مطور النظام فقط"), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def dev_admin_master_required(f):
+    """يقصر العمليات الحساسة على DEV؛ لا يحتاج المطور كلمة مرور إضافية منفصلة."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if g.user["role"] != "dev":
+            return jsonify(error="هذه العملية لمطور النظام فقط"), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+@app.route("/api/dev-security/password", methods=["POST"])
+@dev_required
+def api_set_dev_master_password():
+    data = request.get_json(silent=True) or {}
+    current_password = data.get("current_password") or ""
+    new_password = data.get("new_password") or ""
+    if not check_password_hash(g.user["password_hash"], current_password):
+        return jsonify(error="كلمة مرور المطور الحالية غير صحيحة"), 403
+    if len(new_password) < 12 or not re.search(r"[A-Za-z]", new_password) or not re.search(r"\d", new_password):
+        return jsonify(error="كلمة مرور المطور يجب أن تكون 12 حرفًا على الأقل وتحتوي على حروف وأرقام"), 400
+    db.set_setting("dev_master_password_hash", generate_password_hash(new_password))
+    db.audit(g.user["full_name"], "تعيين كلمة مرور المطور المستقلة")
+    return jsonify(ok=True, message="تم حفظ كلمة مرور المطور بشكل مشفر")
 
 
 # ------------------------------------------------------------------
@@ -259,10 +305,10 @@ def budget_page():
 
 
 @app.route("/users")
-@admin_required
+@dev_or_admin_required
 def users_page():
     users = db.query("SELECT id, username, full_name, role, created_at FROM users ORDER BY id")
-    return render_template("users.html", users=users)
+    return render_template("users.html", users=users, is_dev=(g.user["role"] == "dev"))
 
 
 @app.route("/settings")
@@ -8069,7 +8115,7 @@ def api_journal_delete(eid):
     if period_error:
         return jsonify(error=period_error), 400
 
-    if e["status"] == "posted" and g.user["role"] != "admin":
+    if e["status"] == "posted" and g.user["role"] not in ("admin", "dev"):
         return jsonify(
             error="حذف القيود المرحلة لمدير النظام فقط — قم بإلغاء الترحيل أولًا"
         ), 403
@@ -8954,12 +9000,14 @@ def api_dashboard():
 # ------------------------------------------------------------------
 
 @app.route("/api/users", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_users_create():
     d = request.json or {}
     username = _sanitize((d.get("username") or "").strip().lower())
     full_name = _sanitize((d.get("full_name") or "").strip())
     role = d.get("role") if d.get("role") in ROLES else "accountant"
+    if g.user["role"] != "dev" and role in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع إنشاء مدير آخر أو مطور نظام"), 403
     password = d.get("password") or ""
     if not username or not full_name or len(password) < 8:
         return jsonify(error="بيانات غير مكتملة (كلمة المرور 8 أحرف على الأقل)"), 400
@@ -8976,10 +9024,15 @@ def api_users_create():
 
 
 @app.route("/api/users/<int:uid>/password", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_users_password(uid):
     d = request.json or {}
     password = d.get("password") or ""
+    u = db.query_one("SELECT * FROM users WHERE id=?", (uid,))
+    if not u:
+        return jsonify(error="المستخدم غير موجود"), 404
+    if g.user["role"] != "dev" and u["role"] in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع تغيير كلمة مرور المدير أو المطور"), 403
     if len(password) < 8:
         return jsonify(error="كلمة المرور 8 أحرف على الأقل"), 400
     if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password):
@@ -8994,13 +9047,15 @@ def api_users_password(uid):
 
 
 @app.route("/api/users/<int:uid>/role", methods=["PUT", "POST"])
-@admin_required
+@dev_or_admin_required
 def api_users_role(uid):
     d = request.json or {}
     role = d.get("role")
 
     if role not in ROLES:
         return jsonify(error="الصلاحية غير صحيحة"), 400
+    if g.user["role"] != "dev" and role in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع منح صلاحية المدير أو المطور"), 403
 
     u = db.query_one(
         "SELECT * FROM users WHERE id=?",
@@ -9010,12 +9065,15 @@ def api_users_role(uid):
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
 
+    if g.user["role"] != "dev" and u["role"] in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع تعديل حساب المدير أو المطور"), 403
+
     # منع المدير من تخفيض صلاحية حسابه الحالي
-    if uid == g.user["id"] and role != "admin":
-        return jsonify(error="لا يمكنك تخفيض صلاحية حسابك الحالي"), 400
+    if uid == g.user["id"] and role != g.user["role"]:
+        return jsonify(error="لا يمكنك تغيير صلاحية حسابك الحالي"), 400
 
     # منع إزالة صلاحية آخر مدير
-    if u["role"] == "admin" and role != "admin":
+    if g.user["role"] != "dev" and u["role"] == "admin" and role != "admin":
         admins = db.query(
             "SELECT id FROM users WHERE role='admin'"
         )
@@ -9051,7 +9109,7 @@ def api_users_role(uid):
 
 
 @app.route("/api/users/<int:uid>", methods=["DELETE"])
-@admin_required
+@dev_or_admin_required
 def api_users_delete(uid):
     if uid == g.user["id"]:
         return jsonify(error="لا يمكنك حذف نفسك"), 400
@@ -9059,7 +9117,9 @@ def api_users_delete(uid):
     u = db.query_one("SELECT * FROM users WHERE id=?", (uid,))
     if not u:
         return jsonify(error="المستخدم غير موجود"), 404
-    if u["role"] == "admin" and len(admins) <= 1:
+    if g.user["role"] != "dev" and u["role"] in ("admin", "dev"):
+        return jsonify(error="مدير النظام لا يستطيع حذف حساب المدير أو المطور"), 403
+    if g.user["role"] != "dev" and u["role"] == "admin" and len(admins) <= 1:
         return jsonify(error="لا يمكن حذف آخر مدير نظام"), 400
     db.execute("DELETE FROM users WHERE id=?", (uid,))
     db.audit(g.user["full_name"], "حذف مستخدم", u["username"])
@@ -9517,7 +9577,7 @@ def api_settings():
 # ------------------------------------------------------------------
 
 @app.route("/api/backup", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_backup_create():
     try:
         name = db.create_backup(prefix="manual")
@@ -9528,13 +9588,13 @@ def api_backup_create():
 
 
 @app.route("/api/backups")
-@admin_required
+@dev_or_admin_required
 def api_backups_list():
     return jsonify(backups=db.list_backups())
 
 
 @app.route("/api/backups/<name>")
-@admin_required
+@dev_or_admin_required
 def api_backup_download(name):
     import re as _re
     if not db.SAFE_BACKUP_NAME.match(name):
@@ -9546,7 +9606,7 @@ def api_backup_download(name):
 
 
 @app.route("/api/restore/<name>", methods=["POST"])
-@admin_required
+@dev_admin_master_required
 def api_backup_restore(name):
     try:
         db.restore_backup(name)
@@ -9559,7 +9619,7 @@ def api_backup_restore(name):
 
 
 @app.route("/api/restore-upload", methods=["POST"])
-@admin_required
+@dev_admin_master_required
 def api_backup_restore_upload():
     import sqlite3
     upload = request.files.get("file")
@@ -11411,7 +11471,7 @@ def api_session_close(sid):
     if s["status"] != "open":
         return jsonify(ok=False, error="الوردية مغلقة بالفعل"), 400
     # فقط صاحب الوردية أو المدير
-    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "dev", "accountant"):
         return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
     d = request.get_json(silent=True) or {}
     try:
@@ -11440,7 +11500,7 @@ def api_session_close(sid):
         if current["status"] != "open":
             conn.rollback()
             return jsonify(ok=False, error="الوردية مغلقة بالفعل"), 400
-        if current["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+        if current["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "dev", "accountant"):
             conn.rollback()
             return jsonify(ok=False, error="غير مصرح بإغلاق هذه الوردية"), 403
         s = dict(current)
@@ -11561,7 +11621,7 @@ def api_sessions_list():
     if not company_id:
         return jsonify(ok=False, error="لا توجد شركة"), 400
     # admin/accountant: كل الورديات. غيرهم: وردياتهم فقط.
-    is_admin = g.user["role"] in ("admin", "accountant")
+    is_admin = g.user["role"] in ("admin", "dev", "accountant")
     if is_admin:
         rows = db.query(
             """SELECT cs.*, u.full_name AS user_name
@@ -11597,7 +11657,7 @@ def api_session_detail(sid):
     )
     if not s:
         return jsonify(ok=False, error="الوردية غير موجودة"), 404
-    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "accountant"):
+    if s["user_id"] != g.user["id"] and g.user["role"] not in ("admin", "dev", "accountant"):
         return jsonify(ok=False, error="غير مصرح"), 403
     invoices = db.query(
         """SELECT id, invoice_no, invoice_date, grand_total, paid_amount, remaining_amount, payment_method, status
@@ -11926,7 +11986,7 @@ def api_send_backup():
     return jsonify(ok=success, message=message)
 
 @app.route("/api/backup-settings", methods=["GET"])
-@admin_required
+@dev_or_admin_required
 def api_get_backup_settings():
     company_id = _current_company_id()
     if not company_id:
@@ -11938,7 +11998,7 @@ def api_get_backup_settings():
     return jsonify(ok=True, settings=s)
 
 @app.route("/api/backup-settings", methods=["POST"])
-@admin_required
+@dev_admin_master_required
 def api_save_backup_settings():
     company_id = _current_company_id()
     if not company_id:
@@ -11959,7 +12019,7 @@ def api_save_backup_settings():
     return jsonify(ok=True)
 
 @app.route("/api/backup-test", methods=["POST"])
-@admin_required
+@dev_or_admin_required
 def api_backup_test():
     from email_backup import send_backup_email
     try:
@@ -12007,6 +12067,7 @@ if __name__ == "__main__":
     
 
 @app.route("/api/create-backup", methods=["POST"])
+@dev_or_admin_required
 def api_create_backup():
     try:
         import database as db
@@ -12018,6 +12079,7 @@ def api_create_backup():
 
 
 @app.route("/api/local-backup", methods=["POST"])
+@dev_or_admin_required
 def api_local_backup():
     try:
         # 1. إنشاء نسخة في مجلد البرنامج (لتظهر في القائمة)
@@ -12357,7 +12419,7 @@ def api_report_stock():
 
 @app.route("/reports", methods=["GET"])
 def reports_page():
-    is_admin = (g.user.get("role") == "admin")
+    is_admin = (g.user.get("role") in ("admin", "dev"))
     return render_template("reports.html", is_admin=is_admin)
 
 
@@ -12370,7 +12432,7 @@ def api_reports_download():
     
     # التحقق من الصلاحيات
     user_role = g.user.get("role") if hasattr(g, "user") else None
-    if rep_type in ("weekly", "monthly") and user_role != "admin":
+    if rep_type in ("weekly", "monthly") and user_role not in ("admin", "dev"):
         return jsonify(error="غير مصرح لك بالوصول لهذا التقرير"), 403
 
     output = io.StringIO()
@@ -12395,7 +12457,7 @@ def api_reports_download():
 
 
 @app.route("/api/users", methods=["GET"])
-@admin_required
+@dev_or_admin_required
 def api_users_list():
     try:
         users = db.query("SELECT id, full_name, username, role FROM users")
@@ -12407,6 +12469,7 @@ def api_users_list():
 
 
 @app.route("/api/invoice-settings", methods=["POST"])
+@admin_required
 def api_invoice_settings():
     try:
         d = request.get_json()
@@ -12419,6 +12482,7 @@ def api_invoice_settings():
 
 
 @app.route("/api/general-settings", methods=["POST"])
+@admin_required
 def api_general_settings():
     try:
         d = request.get_json()
@@ -12429,6 +12493,7 @@ def api_general_settings():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/invoice-settings/get", methods=["GET"])
+@admin_required
 def api_invoice_settings_get():
     try:
         return jsonify(ok=True, invoice_paper_size=db.get_setting("invoice_paper_size", "A4"), invoice_font_size=db.get_setting("invoice_font_size", "medium"), invoice_align=db.get_setting("invoice_align", "center"), invoice_show_cashier=db.get_setting("invoice_show_cashier", "1"), invoice_show_tax=db.get_setting("invoice_show_tax", "0"), invoice_copies=db.get_setting("invoice_copies", "1"), invoice_footer_msg=db.get_setting("invoice_footer_msg", ""))
@@ -12438,16 +12503,18 @@ def api_invoice_settings_get():
 
 
 @app.route("/backups", methods=["GET"])
+@dev_or_admin_required
 def backups_page():
     try:
         backups_list = db.list_backups()
     except:
         backups_list = []
-    return render_template("backups.html", backups_list=backups_list)
+    return render_template("backups.html", backups_list=backups_list, user_role=g.user["role"])
 
 
 
 @app.route("/api/settings/data", methods=["GET"])
+@admin_required
 def api_settings_data():
     try:
         warehouses = db.query("SELECT id, name FROM warehouses WHERE company_id=1")
@@ -12460,6 +12527,7 @@ def api_settings_data():
 
 
 @app.route("/api/settings/warehouse/add", methods=["POST"])
+@admin_required
 def api_warehouse_add():
     try:
         d = request.get_json()
@@ -12476,6 +12544,7 @@ def api_warehouse_add():
 
 
 @app.route("/api/settings/currency/add", methods=["POST"])
+@admin_required
 def api_currency_add():
     try:
         d = request.get_json()
@@ -12489,6 +12558,7 @@ def api_currency_add():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/activity/add", methods=["POST"])
+@admin_required
 def api_activity_add():
     try:
         d = request.get_json()
@@ -12522,6 +12592,7 @@ def api_activity_add():
 
 
 @app.route("/api/settings/tax", methods=["GET"])
+@admin_required
 def api_tax_get():
     try:
         return jsonify(ok=True, tax_enabled=db.get_setting("tax_enabled", "0"), tax_rate=db.get_setting("tax_rate", "0"))
@@ -12529,6 +12600,7 @@ def api_tax_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/tax", methods=["POST"])
+@admin_required
 def api_tax_post():
     try:
         d = request.get_json()
@@ -12541,6 +12613,7 @@ def api_tax_post():
 
 
 @app.route("/api/settings/permissions", methods=["GET"])
+@admin_required
 def api_permissions_get():
     try:
         import json
@@ -12551,6 +12624,7 @@ def api_permissions_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/permissions", methods=["POST"])
+@admin_required
 def api_permissions_post():
     try:
         import json
@@ -12564,6 +12638,7 @@ def api_permissions_post():
 
 
 @app.route("/api/settings/signatures", methods=["GET"])
+@admin_required
 def api_signatures_get():
     try:
         return jsonify(ok=True, sig1=db.get_setting("sig_manager", ""), sig2=db.get_setting("sig_accountant", ""))
@@ -12571,6 +12646,7 @@ def api_signatures_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/signatures", methods=["POST"])
+@admin_required
 def api_signatures_post():
     try:
         d = request.get_json()
@@ -12581,6 +12657,7 @@ def api_signatures_post():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/regions", methods=["GET"])
+@admin_required
 def api_regions_get():
     try:
         regions = db.query("SELECT id, name FROM regions WHERE company_id=1")
@@ -12589,6 +12666,7 @@ def api_regions_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/region/add", methods=["POST"])
+@admin_required
 def api_region_add():
     try:
         d = request.get_json()

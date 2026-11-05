@@ -246,14 +246,15 @@
     </div>
   </div>
 
-  {% if user.role == 'admin' %}
+  {% if user.role in ('admin', 'dev') %}
   <div class="top-menu-group">
     <button type="button" class="top-menu-btn">⚙️ الإدارة <span>▼</span></button>
     <div class="top-menu-dropdown">
       <a href="/delivery">🚚 التوصيل</a>
-    <a href="/settings">⚙️ إعدادات عامة</a>
+    {% if user.role in ('admin', 'dev') %}<a href="/settings">⚙️ إعدادات عامة</a>{% endif %}
       <a href="/users">👥 المستخدمون</a>
-      <a href="/audit">🛡️ سجل العمليات</a>
+      {% if user.role in ('admin', 'dev') %}<a href="/backups">💾 النسخ الاحتياطية</a>{% endif %}
+      {% if user.role in ('admin', 'dev') %}<a href="/audit">🛡️ سجل العمليات</a>{% endif %}
       
     </div>
   </div>
@@ -294,12 +295,13 @@
       {% for url, ic, label in nav %}
       <a href="{{ url }}" class="{{ 'active' if request.path == url }}"><span class="ic">{{ ic }}</span>{{ label }}</a>
       {% endfor %}
-      {% if user.role == 'admin' %}
+      {% if user.role in ('admin', 'dev') %}
       <a href="/users" class="{{ 'active' if request.path == '/users' }}"><span class="ic">👥</span>المستخدمون</a>
-      <a href="/audit" class="{{ 'active' if request.path == '/audit' }}"><span class="ic">🛡️</span>سجل العمليات</a>
+      <a href="/backups" class="{{ 'active' if request.path == '/backups' }}"><span class="ic">💾</span>النسخ الاحتياطية</a>
+      {% if user.role in ('admin', 'dev') %}<a href="/audit" class="{{ 'active' if request.path == '/audit' }}"><span class="ic">🛡️</span>سجل العمليات</a>{% endif %}
       {% endif %}
       <a href="/help" class="{{ 'active' if request.path == '/help' }}"><span class="ic">📘</span>دليل الاستخدام</a>
-      <a href="/settings" class="{{ 'active' if request.path == '/settings' }}"><span class="ic">⚙️</span>الإعدادات</a>
+      {% if user.role in ('admin', 'dev') %}<a href="/settings" class="{{ 'active' if request.path == '/settings' }}"><span class="ic">⚙️</span>الإعدادات</a>{% endif %}
       <a href="/logout"><span class="ic">🚪</span>تسجيل الخروج</a>
     </nav>
     <div class="side-footer">
