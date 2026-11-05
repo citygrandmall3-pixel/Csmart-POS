@@ -5,6 +5,20 @@
     <button class="btn btn-gold" onclick="openAddModal()">➕ إضافة مستخدم</button>
 </div>
 
+{% if is_admin %}
+<div class="card" style="margin-bottom:18px; padding:18px; border:1px solid #d7dee8;">
+    <h3 style="margin-top:0;">🔐 كلمة مرور المطور المستقلة</h3>
+    <p style="margin:6px 0 14px; color:#64748b;">يضبطها مدير النظام فقط. سيُطلب من المطور إدخالها قبل استعادة نسخة أو تغيير إعدادات النسخ الاحتياطي.</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px;">
+        <div><label>كلمة مرور المدير الحالية</label><input id="dev-current-password" type="password" autocomplete="current-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
+        <div><label>كلمة مرور المطور الجديدة</label><input id="dev-new-password" type="password" autocomplete="new-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
+        <div><label>تأكيد كلمة مرور المطور</label><input id="dev-confirm-password" type="password" autocomplete="new-password" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;"></div>
+    </div>
+    <div id="dev-password-message" role="status" style="margin:10px 0;color:#b91c1c;"></div>
+    <button class="btn btn-gold" type="button" onclick="saveDevMasterPassword()">حفظ كلمة مرور المطور</button>
+</div>
+{% endif %}
+
 <div class="card">
     <table style="width:100%; border-collapse:collapse;">
         <thead>
@@ -149,6 +163,29 @@ async function savePw() {
         closePwModal();
         alert('✅ تم تغيير كلمة المرور');
     } catch (e) { msg.innerText = "❌ " + e.message; msg.style.color = "red"; }
+}
+
+async function saveDevMasterPassword() {
+    const current = document.getElementById('dev-current-password').value;
+    const password = document.getElementById('dev-new-password').value;
+    const confirm = document.getElementById('dev-confirm-password').value;
+    const msg = document.getElementById('dev-password-message');
+    if (!current) { msg.innerText = "أدخل كلمة مرور المدير الحالية."; return; }
+    if (password.length < 12) { msg.innerText = "كلمة مرور المطور يجب ألا تقل عن 12 حرفًا."; return; }
+    if (password !== confirm) { msg.innerText = "كلمتا مرور المطور غير متطابقتين."; return; }
+    msg.style.color = "#0d6efd";
+    msg.innerText = "جاري الحفظ...";
+    try {
+        await api('/api/dev-security/password', { method: 'POST', body: { current_password: current, new_password: password } });
+        document.getElementById('dev-current-password').value = "";
+        document.getElementById('dev-new-password').value = "";
+        document.getElementById('dev-confirm-password').value = "";
+        msg.style.color = "#15803d";
+        msg.innerText = "تم حفظ كلمة مرور المطور بشكل مشفر.";
+    } catch (e) {
+        msg.style.color = "#b91c1c";
+        msg.innerText = e.message;
+    }
 }
 
 window.addEventListener('load', loadUsers);
