@@ -306,7 +306,7 @@ def budget_page():
 @dev_or_admin_required
 def users_page():
     users = db.query("SELECT id, username, full_name, role, created_at FROM users ORDER BY id")
-    return render_template("users.html", users=users)
+    return render_template("users.html", users=users, is_admin=(g.user["role"] == "admin"))
 
 
 @app.route("/settings")
