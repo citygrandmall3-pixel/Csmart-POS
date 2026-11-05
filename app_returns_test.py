@@ -12507,7 +12507,7 @@ def backups_page():
         backups_list = db.list_backups()
     except:
         backups_list = []
-    return render_template("backups.html", backups_list=backups_list)
+    return render_template("backups.html", backups_list=backups_list, user_role=g.user["role"])
 
 
 
