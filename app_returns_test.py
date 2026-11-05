@@ -12467,6 +12467,7 @@ def api_users_list():
 
 
 @app.route("/api/invoice-settings", methods=["POST"])
+@admin_required
 def api_invoice_settings():
     try:
         d = request.get_json()
@@ -12479,6 +12480,7 @@ def api_invoice_settings():
 
 
 @app.route("/api/general-settings", methods=["POST"])
+@admin_required
 def api_general_settings():
     try:
         d = request.get_json()
@@ -12489,6 +12491,7 @@ def api_general_settings():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/invoice-settings/get", methods=["GET"])
+@admin_required
 def api_invoice_settings_get():
     try:
         return jsonify(ok=True, invoice_paper_size=db.get_setting("invoice_paper_size", "A4"), invoice_font_size=db.get_setting("invoice_font_size", "medium"), invoice_align=db.get_setting("invoice_align", "center"), invoice_show_cashier=db.get_setting("invoice_show_cashier", "1"), invoice_show_tax=db.get_setting("invoice_show_tax", "0"), invoice_copies=db.get_setting("invoice_copies", "1"), invoice_footer_msg=db.get_setting("invoice_footer_msg", ""))
@@ -12509,6 +12512,7 @@ def backups_page():
 
 
 @app.route("/api/settings/data", methods=["GET"])
+@admin_required
 def api_settings_data():
     try:
         warehouses = db.query("SELECT id, name FROM warehouses WHERE company_id=1")
@@ -12521,6 +12525,7 @@ def api_settings_data():
 
 
 @app.route("/api/settings/warehouse/add", methods=["POST"])
+@admin_required
 def api_warehouse_add():
     try:
         d = request.get_json()
@@ -12537,6 +12542,7 @@ def api_warehouse_add():
 
 
 @app.route("/api/settings/currency/add", methods=["POST"])
+@admin_required
 def api_currency_add():
     try:
         d = request.get_json()
@@ -12550,6 +12556,7 @@ def api_currency_add():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/activity/add", methods=["POST"])
+@admin_required
 def api_activity_add():
     try:
         d = request.get_json()
@@ -12583,6 +12590,7 @@ def api_activity_add():
 
 
 @app.route("/api/settings/tax", methods=["GET"])
+@admin_required
 def api_tax_get():
     try:
         return jsonify(ok=True, tax_enabled=db.get_setting("tax_enabled", "0"), tax_rate=db.get_setting("tax_rate", "0"))
@@ -12590,6 +12598,7 @@ def api_tax_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/tax", methods=["POST"])
+@admin_required
 def api_tax_post():
     try:
         d = request.get_json()
@@ -12602,6 +12611,7 @@ def api_tax_post():
 
 
 @app.route("/api/settings/permissions", methods=["GET"])
+@admin_required
 def api_permissions_get():
     try:
         import json
@@ -12612,6 +12622,7 @@ def api_permissions_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/permissions", methods=["POST"])
+@admin_required
 def api_permissions_post():
     try:
         import json
@@ -12625,6 +12636,7 @@ def api_permissions_post():
 
 
 @app.route("/api/settings/signatures", methods=["GET"])
+@admin_required
 def api_signatures_get():
     try:
         return jsonify(ok=True, sig1=db.get_setting("sig_manager", ""), sig2=db.get_setting("sig_accountant", ""))
@@ -12632,6 +12644,7 @@ def api_signatures_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/signatures", methods=["POST"])
+@admin_required
 def api_signatures_post():
     try:
         d = request.get_json()
@@ -12642,6 +12655,7 @@ def api_signatures_post():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/regions", methods=["GET"])
+@admin_required
 def api_regions_get():
     try:
         regions = db.query("SELECT id, name FROM regions WHERE company_id=1")
@@ -12650,6 +12664,7 @@ def api_regions_get():
         return jsonify(ok=False, error=str(e))
 
 @app.route("/api/settings/region/add", methods=["POST"])
+@admin_required
 def api_region_add():
     try:
         d = request.get_json()
