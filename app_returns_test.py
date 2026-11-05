@@ -12144,6 +12144,10 @@ def api_pos_inventory_quick_add():
     track_expiry = flag("track_expiry", 0)
     track_lot = flag("track_lot", 0)
     track_serial = flag("track_serial", 0)
+    if qty > 0 and is_stock_item and not allow_decimal_qty and not qty.is_integer():
+        return jsonify(ok=False, error="هذا الصنف لا يسمح بكميات عشرية"), 400
+    if qty > 0 and not is_stock_item:
+        return jsonify(ok=False, error="لا يمكن إدخال رصيد افتتاحي لصنف غير مخزني"), 400
     try:
         with db.connect() as conn:
             warehouse = _get_pos_inventory_warehouse(conn, company_id)
@@ -12177,8 +12181,6 @@ def api_pos_inventory_quick_add():
                         (company_id, pid, unit_id, price_type, price),
                     )
             if qty > 0 and is_stock_item:
-                if not allow_decimal_qty and not qty.is_integer():
-                    return jsonify(ok=False, error="هذا الصنف لا يسمح بكميات عشرية"), 400
                 conn.execute("INSERT INTO warehouse_stock(company_id, warehouse_id, product_id, quantity) VALUES (?, ?, ?, ?)", (company_id, warehouse["id"], pid, qty))
                 conn.execute(
                     """INSERT INTO stock_movements(company_id, warehouse_id, product_id, unit_id, movement_type, quantity, reference_type, reference_id, notes, created_by)
