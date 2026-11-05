@@ -12687,9 +12687,24 @@ def api_report_expenses():
 @app.route("/api/reports/stock", methods=["GET"])
 def api_report_stock():
     try:
-        stock = db.query("SELECT p.name, p.code, ws.quantity FROM products p LEFT JOIN warehouse_stock ws ON ws.product_id = p.id AND ws.warehouse_id = 3 WHERE p.is_active=1 ORDER BY ws.quantity ASC LIMIT 20")
-        return jsonify(ok=True, stock=stock)
-    except Exception as e: return jsonify(ok=False, error=str(e))
+        company_id = _current_company_id()
+        if not company_id:
+            return jsonify(ok=False, error="لا توجد شركة حالية"), 400
+        warehouse = _get_pos_inventory_warehouse(company_id)
+        stock = db.query(
+            """SELECT p.name, p.code, COALESCE(ws.quantity, 0) AS quantity
+               FROM products p
+               LEFT JOIN warehouse_stock ws
+                 ON ws.company_id=p.company_id
+                AND ws.product_id=p.id
+                AND ws.warehouse_id=?
+               WHERE p.company_id=? AND p.is_active=1
+               ORDER BY quantity ASC, p.name
+               LIMIT 20""",
+            (warehouse["id"], company_id),
+        )
+        return jsonify(ok=True, stock=stock, warehouse=dict(warehouse))
+    except Exception as e: return jsonify(ok=False, error=str(e)), 400
 
 @app.route("/reports", methods=["GET"])
 def reports_page():
