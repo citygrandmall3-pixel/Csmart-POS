@@ -251,9 +251,9 @@
     <button type="button" class="top-menu-btn">⚙️ الإدارة <span>▼</span></button>
     <div class="top-menu-dropdown">
       <a href="/delivery">🚚 التوصيل</a>
-    <a href="/settings">⚙️ إعدادات عامة</a>
+    {% if user.role == 'admin' %}<a href="/settings">⚙️ إعدادات عامة</a>{% endif %}
       <a href="/users">👥 المستخدمون</a>
-      <a href="/audit">🛡️ سجل العمليات</a>
+      {% if user.role == 'admin' %}<a href="/audit">🛡️ سجل العمليات</a>{% endif %}
       
     </div>
   </div>
