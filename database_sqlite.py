@@ -976,6 +976,26 @@ def init_db():
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         )
     """)
+    pref_cols = {r["name"] for r in conn.execute("PRAGMA table_info(company_preferences)")}
+    if "pos_warehouse_id" not in pref_cols:
+        conn.execute("ALTER TABLE company_preferences ADD COLUMN pos_warehouse_id INTEGER REFERENCES warehouses(id) ON DELETE SET NULL")
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS stock_transfers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE RESTRICT,
+            transfer_no TEXT NOT NULL,
+            source_warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
+            destination_warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
+            quantity REAL NOT NULL CHECK(quantity > 0),
+            notes TEXT NOT NULL DEFAULT '',
+            created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            UNIQUE(company_id, transfer_no)
+        );
+        CREATE INDEX IF NOT EXISTS idx_stock_transfers_company ON stock_transfers(company_id);
+    """)
 
 
     # ---------------- Accounting Core V2 migrations ----------------
