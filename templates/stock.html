@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>أرصدة المخازن والتحويلات</title>
+<style>
+body{font-family:Tahoma,Arial,sans-serif;background:#f4f6fa;color:#202535;margin:0;padding:22px}
+.wrap{max-width:1250px;margin:auto}.card{background:#fff;border:1px solid #e2e6ef;border-radius:12px;padding:18px;margin:0 0 18px;box-shadow:0 2px 8px #15213b0a}
+h1,h2{margin:0 0 15px}h1{font-size:25px}h2{font-size:19px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+label{display:flex;flex-direction:column;gap:6px;font-size:14px}
+input,select,button{font:inherit;padding:10px;border:1px solid #cbd2df;border-radius:7px;background:#fff;min-width:0}
+button{background:#1769aa;color:white;border:0;cursor:pointer;font-weight:bold}
+button:disabled{opacity:.5;cursor:not-allowed}
+.tools{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.tools input{flex:1;min-width:180px}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:11px;border-bottom:1px solid #e7eaf0;text-align:right;white-space:nowrap}th{background:#f0f3f8}
+.note{color:#596579;font-size:13px;line-height:1.7}.status{margin-top:10px;font-weight:bold}.good{color:#137547}.bad{color:#b42318}
+</style></head>
+<body><main class="wrap">
+<h1>أرصدة المخازن والتحويلات</h1>
+<section class="card"><h2>أرصدة جميع المخازن</h2>
+<div class="tools"><input id="search" placeholder="بحث باسم الصنف أو كوده أو المخزن"><select id="warehouseFilter"><option value="">كل المخازن</option></select><button onclick="loadBalances()">تحديث الأرصدة</button></div>
+<div class="table-wrap"><table><thead><tr><th>المخزن</th><th>كود الصنف</th><th>الصنف</th><th>الرصيد</th><th>الوحدة</th></tr></thead><tbody id="balances"><tr><td colspan="5">جاري التحميل...</td></tr></tbody></table></div>
+<p class="note">يظهر كل مخزن برصيده المستقل. التحويل ينقل الكمية بين المخزنين ولا يكررها.</p></section>
+<section class="card"><h2>تحويل كمية بين المخازن</h2>
+<div class="grid">
+<label>من المخزن<select id="source"></select></label>
+<label>إلى المخزن<select id="destination"></select></label>
+<label>الصنف<select id="product"></select></label>
+<label>الكمية<input id="quantity" type="number" min="0.001" step="0.001" placeholder="الكمية"></label>
+<label style="grid-column:1/-1">ملاحظات<input id="notes" maxlength="500" placeholder="سبب التحويل أو ملاحظات"></label>
+</div>
+<div class="tools"><button id="transferBtn" onclick="submitTransfer()">تنفيذ التحويل</button></div>
+<div id="status" class="status" role="status"></div>
+<p class="note">يسجل النظام حركة صرف في المخزن المصدر وحركة إضافة في المخزن المستلم ضمن معاملة واحدة. لا يسمح بالتحويل إذا كان رصيد المصدر غير كافٍ أو إذا كان الصنف لا يقبل الكسور.</p>
+</section></main>
+<script>
+let warehouses=[],products=[];
+async function api(url,options){const r=await fetch(url,options||{});let d={};try{d=await r.json()}catch(e){}if(!r.ok||d.ok===false||d.error)throw new Error(d.error||"تعذر تنفيذ الطلب");return d}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+async function init(){try{const [w,p]=await Promise.all([api("/api/warehouses?status=active"),api("/api/products")]);warehouses=w.rows||[];products=(p.items||[]).filter(x=>Number(x.is_active)===1&&Number(x.is_stock_item)===1);const opts=warehouses.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");document.getElementById("warehouseFilter").innerHTML='<option value="">كل المخازن</option>'+opts;document.getElementById("source").innerHTML=opts;document.getElementById("destination").innerHTML=opts;document.getElementById("product").innerHTML=products.map(x=>'<option value="'+x.id+'">'+esc(x.code)+' — '+esc(x.name)+'</option>').join("");if(warehouses.length>1)document.getElementById("destination").selectedIndex=1;await loadBalances()}catch(e){message(e.message,true)}}
+function message(t,bad){const x=document.getElementById("status");x.textContent=t;x.className="status "+(bad?"bad":"good")}
+async function loadBalances(){const body=document.getElementById("balances");try{const q=new URLSearchParams();const s=document.getElementById("search").value.trim(),w=document.getElementById("warehouseFilter").value;if(s)q.set("search",s);if(w)q.set("warehouse_id",w);const d=await api("/api/stock-balances?"+q.toString());const rows=d.rows||[];body.innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.warehouse_name)+'</td><td>'+esc(x.product_code)+'</td><td>'+esc(x.product_name)+'</td><td>'+Number(x.quantity||0).toLocaleString("en-US")+'</td><td>'+esc(x.unit_name||x.unit_symbol||"")+'</td></tr>').join(""):'<tr><td colspan="5">لا توجد أرصدة مسجلة حسب عوامل البحث</td></tr>'}catch(e){body.innerHTML='<tr><td colspan="5">'+esc(e.message)+'</td></tr>'}}
+async function submitTransfer(){const btn=document.getElementById("transferBtn");btn.disabled=true;try{const d=await api("/api/stock-transfers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source_warehouse_id:document.getElementById("source").value,destination_warehouse_id:document.getElementById("destination").value,product_id:document.getElementById("product").value,quantity:document.getElementById("quantity").value,notes:document.getElementById("notes").value})});message(d.message||"تم التحويل");document.getElementById("quantity").value="";await loadBalances()}catch(e){message(e.message,true)}finally{btn.disabled=false}}
+document.getElementById("search").addEventListener("keydown",e=>{if(e.key==="Enter")loadBalances()});document.getElementById("warehouseFilter").addEventListener("change",loadBalances);init();
+</script></body></html>
