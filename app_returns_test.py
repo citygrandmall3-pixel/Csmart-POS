@@ -6752,7 +6752,7 @@ def api_purchase_approve(purchase_id):
                     "error": "حساب المخزون 1301 غير موجود أو غير نشط"
                 }), 400
 
-            if not vat_account:
+            if tax_total > 0 and not vat_account:
                 return jsonify({
                     "ok": False,
                     "error": "حساب ضريبة القيمة المضافة 1202 غير موجود أو غير نشط"
